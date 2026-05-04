@@ -12,10 +12,10 @@
     </parent>
 
     <groupId>com.graduation</groupId>
-    <artifactId>math-ai-paper</artifactId>
+    <artifactId>mathmentor-ai</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>math-ai-paper</name>
-    <description>AI math paper solving and wrong question practice system</description>
+    <name>MathMentor AI</name>
+    <description>AI-powered math problem solving, mistake diagnosis, and adaptive practice system</description>
 
     <properties>
         <java.version>21</java.version>
