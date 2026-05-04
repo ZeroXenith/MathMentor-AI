@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数学 AI 试卷解析与错题强化系统</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<main class="app-shell">
+    <header class="topbar">
+        <div>
+            <h1>数学 AI 试卷解析与错题强化系统</h1>
+            <p>支持 LaTeX 公式渲染、AI 解题、错题诊断和强化练习生成</p>
+        </div>
+        <div class="status-pill">基础版</div>
+    </header>
+
+    <section class="workspace">
+        <section class="panel input-panel">
+            <div class="panel-title">
+                <h2>题目输入</h2>
+                <button class="ghost-btn" id="fillExampleBtn">示例</button>
+            </div>
+            <textarea id="questionInput" spellcheck="false" placeholder="输入数学题，公式可使用 LaTeX，例如：求方程 \(x^2-5x+6=0\) 的解。"></textarea>
+            <button class="primary-btn" id="solveBtn">AI 解题</button>
+            <p class="hint">后续可扩展 PDF、Word、图片 OCR 上传；基础版先保证题目文本和公式解析稳定。</p>
+        </section>
+
+        <section class="panel result-panel">
+            <div class="panel-title">
+                <h2>答案解析</h2>
+                <button class="ghost-btn" id="addWrongBtn" disabled>加入错题本</button>
+            </div>
+            <div id="solutionBox" class="empty-state">输入题目后点击 AI 解题，解析会显示在这里。</div>
+        </section>
+
+        <aside class="panel wrong-panel">
+            <div class="panel-title">
+                <h2>错题本</h2>
+                <button class="ghost-btn" id="refreshBtn">刷新</button>
+            </div>
+            <div id="wrongList" class="wrong-list"></div>
+        </aside>
+    </section>
+
+    <section class="bottom-grid">
+        <section class="panel">
+            <div class="panel-title">
+                <h2>错题分析</h2>
+                <button class="ghost-btn" id="analysisBtn">生成建议</button>
+            </div>
+            <div id="analysisBox" class="analysis-box empty-state">错题加入后，可自动统计薄弱知识点并生成复习建议。</div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-title">
+                <h2>强化练习</h2>
+                <button class="ghost-btn" id="practiceBtn">生成题目</button>
+            </div>
+            <div id="practiceBox" class="practice-list empty-state">根据错题知识点生成相似题和解析。</div>
+        </section>
+    </section>
+</main>
+
+<script defer src="https://cdn.jsdelivr.net/npm/marked@14.1.2/marked.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<script defer src="/app.js"></script>
+</body>
+</html>
