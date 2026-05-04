@@ -49,13 +49,13 @@ http://localhost:18080
 系统默认使用 OpenAI-compatible 接口格式。可以在 PowerShell 中配置：
 
 ```powershell
-$env:AI_API_KEY="你的 API Key"
-$env:AI_BASE_URL="https://api.deepseek.com/chat/completions"
+$env:DEEPSEEK_API_KEY="你的 API Key"
+$env:AI_BASE_URL="https://api.deepseek.com"
 $env:AI_MODEL="deepseek-v4-flash"
 mvn spring-boot:run
 ```
 
-如果使用其他兼容接口，只需要替换 `AI_BASE_URL` 和 `AI_MODEL`。
+项目会按顺序读取 `AI_API_KEY`、`DEEPSEEK_API_KEY`、`OPENAI_API_KEY`。`AI_BASE_URL` 可以配置为网关根地址（例如 `https://api.deepseek.com` 或 `https://api.openai.com/v1`），也可以直接配置为完整的 `/chat/completions` 地址；服务会自动补齐聊天补全路径。如果使用其他兼容接口，只需要替换 `AI_BASE_URL` 和 `AI_MODEL`。
 
 ## 主要接口
 

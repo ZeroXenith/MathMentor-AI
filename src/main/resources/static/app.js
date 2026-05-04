@@ -36,16 +36,25 @@ const api = {
     async delete(url) {
         const response = await fetch(url, {method: "DELETE"});
         if (!response.ok) {
-            throw new Error(await response.text());
+            throw new Error(await responseMessage(response));
         }
     }
 };
 
 async function parseResponse(response) {
     if (!response.ok) {
-        throw new Error(await response.text());
+        throw new Error(await responseMessage(response));
     }
     return response.json();
+}
+
+async function responseMessage(response) {
+    const text = await response.text();
+    try {
+        return JSON.parse(text).message || text;
+    } catch (error) {
+        return text;
+    }
 }
 
 function renderMath(container = document.body) {

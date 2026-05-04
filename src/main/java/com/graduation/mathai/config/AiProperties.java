@@ -9,6 +9,7 @@ public class AiProperties {
     private String apiKey;
     private String baseUrl;
     private String model;
+    private boolean mockEnabled;
 
     public String getApiKey() {
         return apiKey;
@@ -32,5 +33,13 @@ public class AiProperties {
 
     public void setModel(String model) {
         this.model = model;
+    }
+
+    public boolean isMockEnabled() {
+        return mockEnabled;
+    }
+
+    public void setMockEnabled(boolean mockEnabled) {
+        this.mockEnabled = mockEnabled;
     }
 }

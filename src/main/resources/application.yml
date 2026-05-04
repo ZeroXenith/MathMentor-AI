@@ -6,6 +6,7 @@ server:
   port: ${SERVER_PORT:18080}
 
 ai:
-  api-key: ${AI_API_KEY:${OPENAI_API_KEY:}}
-  base-url: ${AI_BASE_URL:https://api.deepseek.com/chat/completions}
+  api-key: ${AI_API_KEY:${DEEPSEEK_API_KEY:${OPENAI_API_KEY:}}}
+  base-url: ${AI_BASE_URL:https://api.deepseek.com}
   model: ${AI_MODEL:deepseek-v4-flash}
+  mock-enabled: ${AI_MOCK_ENABLED:false}

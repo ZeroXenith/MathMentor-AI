@@ -6,16 +6,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.graduation.mathai.config.AiProperties;
 import com.graduation.mathai.model.AiSolution;
 import com.graduation.mathai.model.WrongQuestion;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -34,122 +38,204 @@ public class AiService {
     }
 
     public AiSolution solve(String question) {
-        if (!StringUtils.hasText(properties.getApiKey())) {
+        requireApiKeyOrMock();
+
+        if (properties.isMockEnabled() && !StringUtils.hasText(properties.getApiKey())) {
             return mockSolution(question);
         }
 
         String prompt = """
-                你是一个严谨的数学老师。请解答用户给出的数学题，并严格返回 JSON，不要返回 Markdown 代码块。
-                要求：
-                1. 数学公式必须使用 LaTeX，行内公式用 \\( ... \\)，独立公式用 \\[ ... \\]。
-                2. explanation 使用 Markdown，包含清晰步骤。
-                3. knowledgePoints 和 commonMistakes 使用中文短语数组。
-                JSON 字段：
+                You are a careful Chinese math teacher.
+                Solve the user's math problem and return only one valid JSON object.
+                Requirements:
+                1. All visible text must be Simplified Chinese.
+                2. Use LaTeX for math expressions.
+                3. Inline formulas use \\( ... \\), display formulas use \\[ ... \\].
+                4. explanation must be Markdown with clear steps.
+                5. Do not wrap the JSON in a Markdown code block.
+
+                JSON schema:
                 {
                   "questionType": "题型",
                   "difficulty": "简单/中等/困难",
-                  "finalAnswer": "最终答案，支持 LaTeX",
-                  "explanation": "详细解析，支持 Markdown + LaTeX",
+                  "finalAnswer": "最终答案",
+                  "explanation": "详细解析",
                   "knowledgePoints": ["知识点"],
                   "commonMistakes": ["易错点"]
                 }
-                用户题目：
+
+                User problem:
                 """ + question;
 
         try {
-            String content = chat(prompt);
+            String content = chat(prompt, true);
             AiSolution solution = parseSolution(content, question);
             if (!StringUtils.hasText(solution.getQuestion())) {
                 solution.setQuestion(question);
             }
             return solution;
         } catch (Exception ex) {
-            AiSolution fallback = mockSolution(question);
-            fallback.setExplanation(fallback.getExplanation()
-                    + "\n\n> AI 接口暂时不可用，当前展示本地演示解析。错误信息：" + ex.getMessage());
-            return fallback;
+            throw aiUnavailable(ex);
         }
     }
 
     public String buildAdvice(List<WrongQuestion> wrongQuestions, Map<String, Long> stats) {
         if (wrongQuestions.isEmpty()) {
-            return "当前错题本为空。建议先添加几道错题，系统会根据知识点分布生成复习建议。";
+            return "当前错题本为空。建议先添加错题，系统会根据知识点分布生成复习建议。";
         }
-        if (!StringUtils.hasText(properties.getApiKey())) {
+
+        requireApiKeyOrMock();
+        if (properties.isMockEnabled() && !StringUtils.hasText(properties.getApiKey())) {
             return mockAdvice(stats);
         }
 
         String prompt = """
-                你是学习诊断老师。请根据错题知识点统计，给出 150 字以内的个性化数学复习建议。
-                输出自然语言即可，重点指出薄弱知识点、复习顺序和练习方法。
-                错题统计：
+                You are a Chinese study diagnosis teacher.
+                Based on the wrong-question knowledge-point statistics, write a review suggestion within 150 Chinese characters.
+                Focus on weak knowledge points, review order, and practice method.
+
+                Statistics:
                 """ + stats;
         try {
-            return chat(prompt);
+            return chat(prompt, false);
         } catch (Exception ex) {
-            return mockAdvice(stats);
+            throw aiUnavailable(ex);
         }
     }
 
     public List<AiSolution> generatePractice(List<WrongQuestion> wrongQuestions, Map<String, Long> stats) {
         String mainPoint = stats.keySet().stream().findFirst().orElse("一元二次方程");
-        if (!StringUtils.hasText(properties.getApiKey())) {
+
+        requireApiKeyOrMock();
+        if (properties.isMockEnabled() && !StringUtils.hasText(properties.getApiKey())) {
             return mockPractice(mainPoint);
         }
 
         String prompt = """
-                你是数学出题老师。请根据错题薄弱知识点生成 3 道强化练习题，并严格返回 JSON 数组，不要返回 Markdown 代码块。
-                每个元素字段：
+                You are a Chinese math problem writer.
+                Generate 3 reinforcement practice problems based on the weak knowledge points.
+                Return only one valid JSON object. Do not wrap it in a Markdown code block.
+
+                JSON schema:
                 {
-                  "question": "题目，公式使用 LaTeX",
-                  "questionType": "题型",
-                  "difficulty": "简单/中等/困难",
-                  "finalAnswer": "答案，公式使用 LaTeX",
-                  "explanation": "解析，Markdown + LaTeX",
-                  "knowledgePoints": ["知识点"],
-                  "commonMistakes": ["易错点"]
+                  "items": [
+                    {
+                      "question": "题目，公式使用 LaTeX",
+                      "questionType": "题型",
+                      "difficulty": "简单/中等/困难",
+                      "finalAnswer": "答案，公式使用 LaTeX",
+                      "explanation": "解析，Markdown + LaTeX",
+                      "knowledgePoints": ["知识点"],
+                      "commonMistakes": ["易错点"]
+                    }
+                  ]
                 }
-                错题知识点统计：
+
+                Weak-point statistics:
                 """ + stats;
         try {
-            String content = chat(prompt);
+            String content = chat(prompt, true);
             JsonNode root = objectMapper.readTree(extractJson(content));
+            JsonNode items = root.isArray() ? root : root.path("items");
             List<AiSolution> result = new ArrayList<>();
-            if (root.isArray()) {
-                for (JsonNode node : root) {
+            if (items.isArray()) {
+                for (JsonNode node : items) {
                     result.add(objectMapper.treeToValue(node, AiSolution.class));
                 }
             }
             return result.isEmpty() ? mockPractice(mainPoint) : result;
         } catch (Exception ex) {
-            return mockPractice(mainPoint);
+            throw aiUnavailable(ex);
         }
     }
 
-    private String chat(String prompt) throws IOException, InterruptedException {
-        Map<String, Object> payload = Map.of(
-                "model", properties.getModel(),
-                "messages", List.of(
-                        Map.of("role", "system", "content", "你只输出用户要求的内容，数学公式保持 LaTeX 格式。"),
-                        Map.of("role", "user", "content", prompt)
-                ),
-                "temperature", 0.2
-        );
+    private String chat(String prompt, boolean jsonObject) throws IOException, InterruptedException {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("model", properties.getModel());
+        payload.put("messages", List.of(
+                Map.of("role", "system", "content", "Return exactly what the user asks for. Keep math formulas in LaTeX."),
+                Map.of("role", "user", "content", prompt)
+        ));
+        payload.put("temperature", 0.2);
+        payload.put("max_tokens", 2048);
+        payload.put("stream", false);
+        if (jsonObject) {
+            payload.put("response_format", Map.of("type", "json_object"));
+        }
 
+        HttpResponse<String> response = sendChatRequest(payload);
+        if (isHttpError(response) && jsonObject) {
+            payload.remove("response_format");
+            response = sendChatRequest(payload);
+        }
+        if (isHttpError(response)) {
+            throw new IOException("AI HTTP " + response.statusCode() + ": " + extractErrorMessage(response.body()));
+        }
+
+        JsonNode root = objectMapper.readTree(response.body());
+        JsonNode choice = root.path("choices").path(0);
+        String content = choice.path("message").path("content").asText();
+        if (!StringUtils.hasText(content)) {
+            throw new IOException("AI response content is empty, finish_reason=" + choice.path("finish_reason").asText("unknown"));
+        }
+        return content;
+    }
+
+    private HttpResponse<String> sendChatRequest(Map<String, Object> payload) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(properties.getBaseUrl()))
+                .uri(chatCompletionsUri())
                 .timeout(Duration.ofSeconds(60))
                 .header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + properties.getApiKey())
-                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)))
+                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8))
                 .build();
 
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new IOException("AI HTTP " + response.statusCode() + ": " + response.body());
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    }
+
+    private URI chatCompletionsUri() {
+        String baseUrl = properties.getBaseUrl().trim();
+        if (baseUrl.endsWith("/chat/completions") || baseUrl.endsWith("/chat/completions/")) {
+            return URI.create(baseUrl);
         }
-        JsonNode root = objectMapper.readTree(response.body());
-        return root.path("choices").path(0).path("message").path("content").asText();
+        String separator = baseUrl.endsWith("/") ? "" : "/";
+        return URI.create(baseUrl + separator + "chat/completions");
+    }
+
+    private boolean isHttpError(HttpResponse<String> response) {
+        return response.statusCode() < 200 || response.statusCode() >= 300;
+    }
+
+    private void requireApiKeyOrMock() {
+        if (!StringUtils.hasText(properties.getApiKey()) && !properties.isMockEnabled()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "AI API key is missing. Set DEEPSEEK_API_KEY or AI_API_KEY before starting the app."
+            );
+        }
+    }
+
+    private ResponseStatusException aiUnavailable(Exception ex) {
+        if (ex instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+        }
+        return new ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI API call failed: " + ex.getMessage(), ex);
+    }
+
+    private String extractErrorMessage(String body) {
+        try {
+            String message = objectMapper.readTree(body).path("error").path("message").asText();
+            if (StringUtils.hasText(message)) {
+                return removeApiKeyHint(message);
+            }
+        } catch (JsonProcessingException ignored) {
+            // Use the raw body below.
+        }
+        return removeApiKeyHint(body);
+    }
+
+    private String removeApiKeyHint(String message) {
+        return message.replaceAll("(?i),?\\s*Your api key:[^,}]+", "").trim();
     }
 
     private AiSolution parseSolution(String content, String question) throws JsonProcessingException {
@@ -216,7 +302,7 @@ public class AiService {
 
     private String mockAdvice(Map<String, Long> stats) {
         String mainPoint = stats.keySet().stream().findFirst().orElse("基础概念");
-        return "当前薄弱点集中在“" + mainPoint + "”。建议先复习对应公式和基本题型，再做 3 到 5 道同类变式题。练习时重点检查计算符号、步骤完整性和最终答案是否回代验证。";
+        return "当前薄弱点集中在“" + mainPoint + "”。建议先复习对应公式和基本题型，再做 3 到 5 道同类变式题。";
     }
 
     private List<AiSolution> mockPractice(String knowledgePoint) {
