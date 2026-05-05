@@ -27,6 +27,11 @@ public class WrongQuestionService {
         return wrongQuestionRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 
+    public List<WrongQuestion> list(long userId, String subject) {
+        String normalizedSubject = normalizeSubject(subject);
+        return wrongQuestionRepository.findByUserIdAndSubjectOrderByCreatedAtDesc(userId, normalizedSubject);
+    }
+
     public WrongQuestion add(long userId, AiSolution solution, String mistakeReason) {
         WrongQuestion item = new WrongQuestion();
         item.setUserId(userId);
@@ -59,6 +64,14 @@ public class WrongQuestionService {
 
     public AnalysisResponse analyze(long userId) {
         List<WrongQuestion> wrongQuestions = list(userId);
+        return analyze(wrongQuestions);
+    }
+
+    public AnalysisResponse analyze(long userId, String subject) {
+        return analyze(list(userId, subject));
+    }
+
+    private AnalysisResponse analyze(List<WrongQuestion> wrongQuestions) {
         Map<String, Long> stats = knowledgeStats(wrongQuestions);
         String advice = aiService.buildAdvice(wrongQuestions, stats);
         List<String> reviewPlan = buildReviewPlan(stats);
@@ -68,6 +81,11 @@ public class WrongQuestionService {
 
     public List<AiSolution> generatePractice(long userId) {
         List<WrongQuestion> wrongQuestions = list(userId);
+        return aiService.generatePractice(wrongQuestions, knowledgeStats(wrongQuestions));
+    }
+
+    public List<AiSolution> generatePractice(long userId, String subject) {
+        List<WrongQuestion> wrongQuestions = list(userId, subject);
         return aiService.generatePractice(wrongQuestions, knowledgeStats(wrongQuestions));
     }
 
@@ -96,5 +114,9 @@ public class WrongQuestionService {
         });
         plan.add("隔天回看已掌握标记，未掌握题目继续进入强化练习。");
         return plan;
+    }
+
+    private String normalizeSubject(String subject) {
+        return "english".equalsIgnoreCase(String.valueOf(subject)) ? "english" : "math";
     }
 }

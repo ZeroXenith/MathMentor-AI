@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -42,8 +43,9 @@ public class ApiController {
     }
 
     @GetMapping("/wrong-questions")
-    public List<WrongQuestion> wrongQuestions(@RequestHeader(value = "X-Auth-Token", required = false) String token) {
-        return wrongQuestionService.list(authService.requireUserId(token));
+    public List<WrongQuestion> wrongQuestions(@RequestHeader(value = "X-Auth-Token", required = false) String token,
+                                              @RequestParam(value = "subject", required = false) String subject) {
+        return wrongQuestionService.list(authService.requireUserId(token), subject);
     }
 
     @PostMapping("/wrong-questions")
@@ -67,12 +69,14 @@ public class ApiController {
     }
 
     @GetMapping("/analysis")
-    public AnalysisResponse analysis(@RequestHeader(value = "X-Auth-Token", required = false) String token) {
-        return wrongQuestionService.analyze(authService.requireUserId(token));
+    public AnalysisResponse analysis(@RequestHeader(value = "X-Auth-Token", required = false) String token,
+                                     @RequestParam(value = "subject", required = false) String subject) {
+        return wrongQuestionService.analyze(authService.requireUserId(token), subject);
     }
 
     @PostMapping("/practice")
-    public List<AiSolution> practice(@RequestHeader(value = "X-Auth-Token", required = false) String token) {
-        return wrongQuestionService.generatePractice(authService.requireUserId(token));
+    public List<AiSolution> practice(@RequestHeader(value = "X-Auth-Token", required = false) String token,
+                                     @RequestParam(value = "subject", required = false) String subject) {
+        return wrongQuestionService.generatePractice(authService.requireUserId(token), subject);
     }
 }

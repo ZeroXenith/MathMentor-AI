@@ -25,11 +25,15 @@ let currentSubject = localStorage.getItem("mathmentor_subject") || "math";
 const subjectConfig = {
     math: {
         label: "数学",
+        emptyWrongText: "数学错题本为空。解析数学题后可以加入这里。",
+        loginWrongText: "登录后可以保存和查看你的数学错题本。",
         placeholder: "输入数学题，公式可使用 LaTeX，例如：求不定积分：\\(\\int \\frac{\\ln x}{x\\sqrt{1+\\ln x}} dx\\)",
         example: "求不定积分：\\(\\int \\frac{\\ln x}{x\\sqrt{1+\\ln x}} dx\\)"
     },
     english: {
         label: "英语",
+        emptyWrongText: "英语错题本为空。解析英语题后可以加入这里。",
+        loginWrongText: "登录后可以保存和查看你的英语错题本。",
         placeholder: "输入英语题，例如：Analyze the sentence: Although it was raining, we still went out.",
         example: "Analyze the sentence: Although it was raining, we still went out."
     }
@@ -302,12 +306,12 @@ async function addWrongQuestion() {
 
 async function loadWrongQuestions() {
     if (!auth?.token) {
-        wrongList.innerHTML = `<div class="empty-state">登录后可以保存和查看你的错题本。</div>`;
+        wrongList.innerHTML = `<div class="empty-state">${subjectConfig[currentSubject].loginWrongText}</div>`;
         return;
     }
-    const items = await api.get("/api/wrong-questions");
+    const items = await api.get(`/api/wrong-questions?subject=${currentSubject}`);
     if (!items.length) {
-        wrongList.innerHTML = `<div class="empty-state">错题本为空。解析题目后可以加入这里。</div>`;
+        wrongList.innerHTML = `<div class="empty-state">${subjectConfig[currentSubject].emptyWrongText}</div>`;
         return;
     }
     wrongList.innerHTML = items.map(item => `
@@ -333,7 +337,7 @@ async function loadAnalysis() {
     }
     setBusy(analysisBtn, true, "生成中");
     try {
-        const data = await api.get("/api/analysis");
+        const data = await api.get(`/api/analysis?subject=${currentSubject}`);
         const statRows = Object.entries(data.knowledgeStats || {})
             .map(([point, count]) => `<span class="tag">${escapeHtml(point)}：${count}</span>`)
             .join("") || `<span class="tag">暂无数据</span>`;
@@ -365,7 +369,7 @@ async function generatePractice() {
     }
     setBusy(practiceBtn, true, "生成中");
     try {
-        const items = await api.post("/api/practice");
+        const items = await api.post(`/api/practice?subject=${currentSubject}`);
         practiceBox.className = "practice-list";
         practiceBox.innerHTML = items.map((item, index) => `
             <article class="practice-card">
@@ -452,6 +456,7 @@ subjectButtons.forEach(button => {
         currentSubject = button.dataset.subject || "math";
         localStorage.setItem("mathmentor_subject", currentSubject);
         updateSubjectView();
+        loadWrongQuestions();
     });
 });
 solveBtn.addEventListener("click", solveQuestion);
@@ -491,4 +496,8 @@ function updateSubjectView() {
         button.classList.toggle("active", button.dataset.subject === currentSubject);
     });
     questionInput.placeholder = subjectConfig[currentSubject].placeholder;
+    analysisBox.textContent = `${subjectConfig[currentSubject].label}错题加入后，可自动统计薄弱知识点并生成复习建议。`;
+    analysisBox.className = "analysis-box empty-state";
+    practiceBox.textContent = `根据${subjectConfig[currentSubject].label}错题知识点生成相似题和解析。`;
+    practiceBox.className = "practice-list empty-state";
 }
