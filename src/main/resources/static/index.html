@@ -38,6 +38,10 @@
                 <button class="subject-btn" data-subject="english">英语扩展</button>
             </div>
             <textarea id="questionInput" spellcheck="false" placeholder="输入数学题，公式可使用 LaTeX，例如：求不定积分：\(\int \frac{\ln x}{x\sqrt{1+\ln x}} dx\)"></textarea>
+            <div class="preview-box" id="questionPreview">
+                <div class="section-label">公式预览</div>
+                <div class="empty-state">输入数学公式后，这里会实时渲染预览。</div>
+            </div>
             <button class="primary-btn" id="solveBtn">AI 解题</button>
             <p class="hint">支持文本题目、LaTeX 公式、答案解析、错题沉淀和针对性练习。</p>
         </section>
@@ -78,9 +82,19 @@
     </section>
 </main>
 
+<div class="modal-backdrop" id="wrongDetailModal" hidden>
+    <article class="detail-modal">
+        <div class="panel-title">
+            <h2>错题详情</h2>
+            <button class="ghost-btn" id="closeWrongDetailBtn">关闭</button>
+        </div>
+        <div id="wrongDetailBody"></div>
+    </article>
+</div>
+
 <script defer src="https://cdn.jsdelivr.net/npm/marked@14.1.2/marked.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
-<script defer src="/app.js?v=20260505-auth-session-fix"></script>
+<script defer src="/app.js?v=20260505-preview-detail"></script>
 </body>
 </html>

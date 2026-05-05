@@ -159,9 +159,14 @@ public class AiService {
                 1. All visible text must be Simplified Chinese.
                 2. Use LaTeX for math expressions.
                 3. Inline formulas use \\( ... \\), display formulas use \\[ ... \\].
-                4. explanation must be Markdown with clear steps.
+                4. explanation must be Markdown with detailed, step-by-step derivation.
                 5. Do not wrap the JSON in a Markdown code block.
                 6. Never use plain parentheses like (u = ln x) or square brackets like [formula] as math delimiters.
+                7. For math proof/calculation questions, explanation must include:
+                   - "### 步骤1：..."
+                   - "### 步骤2：..."
+                   - at least one formula transformation per key step
+                   - final substitution or verification when applicable
 
                 JSON schema:
                 {

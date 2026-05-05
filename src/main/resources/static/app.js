@@ -1,4 +1,5 @@
 let currentSolution = null;
+let currentWrongQuestions = [];
 
 const questionInput = document.querySelector("#questionInput");
 const solveBtn = document.querySelector("#solveBtn");
@@ -18,6 +19,10 @@ const solutionBox = document.querySelector("#solutionBox");
 const wrongList = document.querySelector("#wrongList");
 const analysisBox = document.querySelector("#analysisBox");
 const practiceBox = document.querySelector("#practiceBox");
+const questionPreview = document.querySelector("#questionPreview");
+const wrongDetailModal = document.querySelector("#wrongDetailModal");
+const wrongDetailBody = document.querySelector("#wrongDetailBody");
+const closeWrongDetailBtn = document.querySelector("#closeWrongDetailBtn");
 
 let auth = JSON.parse(localStorage.getItem("mathmentor_auth") || "null");
 let currentSubject = localStorage.getItem("mathmentor_subject") || "math";
@@ -99,21 +104,6 @@ async function responseMessage(response) {
     }
 }
 
-function renderMath(container = document.body) {
-    if (!window.renderMathInElement) {
-        return;
-    }
-    renderMathInElement(container, {
-        delimiters: [
-            {left: "$$", right: "$$", display: true},
-            {left: "$", right: "$", display: false},
-            {left: "\\[", right: "\\]", display: true},
-            {left: "\\(", right: "\\)", display: false}
-        ],
-        throwOnError: false
-    });
-}
-
 function markdown(text) {
     const normalized = normalizeMathText(text || "");
     const protectedMath = protectMath(normalized);
@@ -125,23 +115,20 @@ function markdown(text) {
 }
 
 function normalizeMathText(value) {
-    let text = String(value ?? "");
+    const text = String(value ?? "")
+        .replace(/\r\n/g, "\n")
+        .replace(/\\left\s*\(/g, "\\left(")
+        .replace(/\\right\s*\)/g, "\\right)")
+        .replace(/,\s*dt/g, "\\,dt")
+        .replace(/,\s*dx/g, "\\,dx")
+        .replace(/,\s*du/g, "\\,du");
 
-    text = text.replace(/\r\n/g, "\n");
-
-    // Fix common punctuation mistakes from LLM output.
-    text = text.replace(/\\left\s*\(/g, "\\left(").replace(/\\right\s*\)/g, "\\right)");
-    text = text.replace(/,\s*dt/g, "\\,dt").replace(/,\s*dx/g, "\\,dx").replace(/,\s*du/g, "\\,du");
-
-    // If a standalone answer contains LaTeX commands but no delimiter, render it as display math.
     const trimmed = text.trim();
     const hasDelimiter = /\\\(|\\\[|\$/.test(trimmed);
-    const looksLikeFormula = /\\[a-zA-Z]+|[\^_{}=]/.test(trimmed);
     const isSingleLine = !trimmed.includes("\n");
-    if (trimmed && isSingleLine && looksLikeFormula && !hasDelimiter) {
+    if (trimmed && isSingleLine && looksLikeFormula(trimmed) && !hasDelimiter) {
         return `$$${trimmed}$$`;
     }
-
     return text;
 }
 
@@ -159,19 +146,13 @@ function protectMath(text) {
     result = result.replace(/\\\[([\s\S]+?)\\\]/g, (_, formula) => push(formula, true));
     result = result.replace(/\\\(([\s\S]+?)\\\)/g, (_, formula) => push(formula, false));
     result = result.replace(/\$([^$\n]+?)\$/g, (_, formula) => push(formula, false));
-
-    // LLMs often use [ \int ... ] as math without real TeX delimiters.
     result = result.replace(/\[\s*([^\]\n]*(?:\\[a-zA-Z]+|[\^_{}=+\-*/]|sqrt|frac|ln|int|sum|lim)[^\]\n]*)\s*\]/g, (_, formula) => push(formula, true));
-
-    // Inline math written as ( u = \ln x ).
     result = result.replace(/\(\s*([^()\n]*(?:\\[a-zA-Z]+|[\^_{}=+\-*/]|sqrt|frac|ln|int|sum|lim)[^()\n]*)\s*\)/g, (_, formula) => push(formula, false));
 
-    // Standalone raw LaTeX answer.
     if (items.length === 0 && looksLikeStandaloneFormula(result)) {
         result = push(result, true);
     }
 
-    // Inline raw TeX fragments such as \frac{...}{...}, \int ... dx, \sqrt{...}.
     result = result.replace(/((?:\\(?:frac|sqrt|int|sum|lim|left|right|ln|cdot|times|pm|alpha|beta|theta|pi)\b|[A-Za-z0-9{}_^+\-*/=]+\s*(?:\^|_|=))[^\u4e00-\u9fa5，。；：、]*?(?:\s*\+\s*C)?)/g, (match) => {
         const cleaned = match.trim();
         if (!looksLikeFormula(cleaned) || cleaned.length < 3) {
@@ -264,7 +245,6 @@ function renderSolution(solution) {
             </div>
         </article>
     `;
-    renderMath(solutionBox);
 }
 
 async function solveQuestion() {
@@ -289,13 +269,10 @@ async function solveQuestion() {
 }
 
 async function addWrongQuestion() {
-    if (!currentSolution) {
+    if (!currentSolution || !ensureLoggedIn()) {
         return;
     }
-    if (!ensureLoggedIn()) {
-        return;
-    }
-    const mistakeReason = prompt("填写错误原因，方便后续分析：", "计算步骤不熟练");
+    const mistakeReason = prompt("填写错误原因，方便后续分析：", currentSubject === "math" ? "计算步骤不熟练" : "语法点不熟悉");
     setBusy(addWrongBtn, true, "保存中");
     try {
         await api.post("/api/wrong-questions", {solution: currentSolution, mistakeReason});
@@ -310,16 +287,18 @@ async function addWrongQuestion() {
 
 async function loadWrongQuestions() {
     if (!auth?.token) {
+        currentWrongQuestions = [];
         wrongList.innerHTML = `<div class="empty-state">${subjectConfig[currentSubject].loginWrongText}</div>`;
         return;
     }
     const items = await api.get(`/api/wrong-questions?subject=${currentSubject}`);
+    currentWrongQuestions = items;
     if (!items.length) {
         wrongList.innerHTML = `<div class="empty-state">${subjectConfig[currentSubject].emptyWrongText}</div>`;
         return;
     }
     wrongList.innerHTML = items.map(item => `
-        <article class="wrong-card">
+        <article class="wrong-card" data-id="${item.id}">
             <h3>${escapeHtml(item.question)}</h3>
             <div class="meta-row">${tags(item.knowledgePoints)}${item.mastered ? '<span class="tag">已掌握</span>' : '<span class="tag warn">待巩固</span>'}</div>
             <div class="section-label">答案</div>
@@ -332,7 +311,6 @@ async function loadWrongQuestions() {
             </div>
         </article>
     `).join("");
-    renderMath(wrongList);
 }
 
 async function loadAnalysis() {
@@ -358,7 +336,6 @@ async function loadAnalysis() {
             <div class="section-label">复习计划</div>
             <ol>${(data.reviewPlan || []).map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ol>
         `;
-        renderMath(analysisBox);
     } catch (error) {
         analysisBox.textContent = "分析失败：" + error.message;
         analysisBox.className = "analysis-box empty-state";
@@ -385,7 +362,6 @@ async function generatePractice() {
                 ${renderTextBlock(item.explanation)}
             </article>
         `).join("");
-        renderMath(practiceBox);
     } catch (error) {
         practiceBox.textContent = "生成失败：" + error.message;
         practiceBox.className = "practice-list empty-state";
@@ -435,9 +411,9 @@ function clearExpiredAuth() {
     localStorage.removeItem("mathmentor_auth");
     updateAuthView();
     loadWrongQuestions();
-    analysisBox.textContent = "错题加入后，可自动统计薄弱知识点并生成复习建议。";
+    analysisBox.textContent = `${subjectConfig[currentSubject].label}错题加入后，可自动统计薄弱知识点并生成复习建议。`;
     analysisBox.className = "analysis-box empty-state";
-    practiceBox.textContent = "根据错题知识点生成相似题和解析。";
+    practiceBox.textContent = `根据${subjectConfig[currentSubject].label}错题知识点生成相似题和解析。`;
     practiceBox.className = "practice-list empty-state";
 }
 
@@ -459,8 +435,73 @@ function ensureLoggedIn() {
     return false;
 }
 
+function updateQuestionPreview() {
+    if (!questionPreview) {
+        return;
+    }
+    if (currentSubject !== "math") {
+        questionPreview.hidden = true;
+        return;
+    }
+    questionPreview.hidden = false;
+    const value = questionInput.value.trim();
+    questionPreview.innerHTML = `
+        <div class="section-label">公式预览</div>
+        ${value ? renderTextBlock(value) : '<div class="empty-state">输入数学公式后，这里会实时渲染预览。</div>'}
+    `;
+}
+
+function updateSubjectView() {
+    subjectButtons.forEach(button => {
+        button.classList.toggle("active", button.dataset.subject === currentSubject);
+    });
+    questionInput.placeholder = subjectConfig[currentSubject].placeholder;
+    analysisBox.textContent = `${subjectConfig[currentSubject].label}错题加入后，可自动统计薄弱知识点并生成复习建议。`;
+    analysisBox.className = "analysis-box empty-state";
+    practiceBox.textContent = `根据${subjectConfig[currentSubject].label}错题知识点生成相似题和解析。`;
+    practiceBox.className = "practice-list empty-state";
+    updateQuestionPreview();
+}
+
+function openWrongDetail(id) {
+    const item = currentWrongQuestions.find(entry => entry.id === id);
+    if (!item) {
+        return;
+    }
+    wrongDetailBody.innerHTML = `
+        <div class="meta-row">
+            <span class="tag">${escapeHtml(subjectConfig[item.subject || "math"]?.label || "数学")}</span>
+            ${tags(item.knowledgePoints)}
+            ${item.mastered ? '<span class="tag">已掌握</span>' : '<span class="tag warn">待巩固</span>'}
+        </div>
+        <section class="answer-section">
+            <div class="section-label">题目</div>
+            ${renderTextBlock(item.question)}
+        </section>
+        <section class="answer-section final-answer">
+            <div class="section-label">答案</div>
+            ${renderTextBlock(item.finalAnswer)}
+        </section>
+        <section class="answer-section">
+            <div class="section-label">原解析</div>
+            ${renderTextBlock(item.explanation)}
+        </section>
+        <section class="answer-section">
+            <div class="section-label">错因记录</div>
+            <div>${escapeHtml(item.mistakeReason || "暂未填写")}</div>
+        </section>
+    `;
+    wrongDetailModal.hidden = false;
+}
+
+function closeWrongDetail() {
+    wrongDetailModal.hidden = true;
+    wrongDetailBody.innerHTML = "";
+}
+
 fillExampleBtn.addEventListener("click", () => {
     questionInput.value = subjectConfig[currentSubject].example;
+    updateQuestionPreview();
 });
 subjectButtons.forEach(button => {
     button.addEventListener("click", () => {
@@ -478,37 +519,38 @@ practiceBtn.addEventListener("click", generatePractice);
 loginBtn.addEventListener("click", () => loginOrRegister("login"));
 registerBtn.addEventListener("click", () => loginOrRegister("register"));
 logoutBtn.addEventListener("click", logout);
+questionInput.addEventListener("input", updateQuestionPreview);
 wrongList.addEventListener("click", async event => {
     const button = event.target.closest("button[data-action]");
-    if (!button) {
+    if (button) {
+        const id = button.dataset.id;
+        if (button.dataset.action === "delete") {
+            await api.delete(`/api/wrong-questions/${id}`);
+        }
+        if (button.dataset.action === "master") {
+            const mastered = !button.classList.contains("active");
+            await api.put(`/api/wrong-questions/${id}`, {mastered});
+        }
+        await loadWrongQuestions();
+        await loadAnalysis();
         return;
     }
-    const id = button.dataset.id;
-    if (button.dataset.action === "delete") {
-        await api.delete(`/api/wrong-questions/${id}`);
+
+    const card = event.target.closest(".wrong-card");
+    if (card) {
+        openWrongDetail(Number(card.dataset.id));
     }
-    if (button.dataset.action === "master") {
-        const mastered = !button.classList.contains("active");
-        await api.put(`/api/wrong-questions/${id}`, {mastered});
+});
+closeWrongDetailBtn.addEventListener("click", closeWrongDetail);
+wrongDetailModal.addEventListener("click", event => {
+    if (event.target === wrongDetailModal) {
+        closeWrongDetail();
     }
-    await loadWrongQuestions();
-    await loadAnalysis();
 });
 
 document.addEventListener("DOMContentLoaded", async () => {
     updateSubjectView();
     updateAuthView();
     await loadWrongQuestions();
-    renderMath(document.body);
+    updateQuestionPreview();
 });
-
-function updateSubjectView() {
-    subjectButtons.forEach(button => {
-        button.classList.toggle("active", button.dataset.subject === currentSubject);
-    });
-    questionInput.placeholder = subjectConfig[currentSubject].placeholder;
-    analysisBox.textContent = `${subjectConfig[currentSubject].label}错题加入后，可自动统计薄弱知识点并生成复习建议。`;
-    analysisBox.className = "analysis-box empty-state";
-    practiceBox.textContent = `根据${subjectConfig[currentSubject].label}错题知识点生成相似题和解析。`;
-    practiceBox.className = "practice-list empty-state";
-}
