@@ -30,6 +30,7 @@ public class WrongQuestionService {
     public WrongQuestion add(long userId, AiSolution solution, String mistakeReason) {
         WrongQuestion item = new WrongQuestion();
         item.setUserId(userId);
+        item.setSubject(StringUtils.hasText(solution.getSubject()) ? solution.getSubject() : "math");
         item.setQuestion(solution.getQuestion());
         item.setFinalAnswer(solution.getFinalAnswer());
         item.setExplanation(solution.getExplanation());

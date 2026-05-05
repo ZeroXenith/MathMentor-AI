@@ -13,12 +13,27 @@ const logoutBtn = document.querySelector("#logoutBtn");
 const usernameInput = document.querySelector("#usernameInput");
 const passwordInput = document.querySelector("#passwordInput");
 const authUser = document.querySelector("#authUser");
+const subjectButtons = document.querySelectorAll(".subject-btn");
 const solutionBox = document.querySelector("#solutionBox");
 const wrongList = document.querySelector("#wrongList");
 const analysisBox = document.querySelector("#analysisBox");
 const practiceBox = document.querySelector("#practiceBox");
 
 let auth = JSON.parse(localStorage.getItem("mathmentor_auth") || "null");
+let currentSubject = localStorage.getItem("mathmentor_subject") || "math";
+
+const subjectConfig = {
+    math: {
+        label: "数学",
+        placeholder: "输入数学题，公式可使用 LaTeX，例如：求不定积分：\\(\\int \\frac{\\ln x}{x\\sqrt{1+\\ln x}} dx\\)",
+        example: "求不定积分：\\(\\int \\frac{\\ln x}{x\\sqrt{1+\\ln x}} dx\\)"
+    },
+    english: {
+        label: "英语",
+        placeholder: "输入英语题，例如：Analyze the sentence: Although it was raining, we still went out.",
+        example: "Analyze the sentence: Although it was raining, we still went out."
+    }
+};
 
 const api = {
     async post(url, data = {}) {
@@ -216,7 +231,8 @@ function renderSolution(solution) {
     solutionBox.innerHTML = `
         <article class="solution-card">
             <div class="meta-row">
-                <span class="tag">${escapeHtml(solution.questionType || "数学题")}</span>
+                <span class="tag">${escapeHtml(subjectConfig[solution.subject || "math"]?.label || "数学")}</span>
+                <span class="tag">${escapeHtml(solution.questionType || "题目")}</span>
                 <span class="tag">${escapeHtml(solution.difficulty || "未标注难度")}</span>
                 ${tags(solution.knowledgePoints)}
             </div>
@@ -253,7 +269,7 @@ async function solveQuestion() {
     setBusy(solveBtn, true, "解题中...");
     addWrongBtn.disabled = true;
     try {
-        currentSolution = await api.post("/api/solve", {question});
+        currentSolution = await api.post("/api/solve", {question, subject: currentSubject});
         renderSolution(currentSolution);
         addWrongBtn.disabled = false;
     } catch (error) {
@@ -429,7 +445,14 @@ function ensureLoggedIn() {
 }
 
 fillExampleBtn.addEventListener("click", () => {
-    questionInput.value = "求不定积分：\\(\\int \\frac{\\ln x}{x\\sqrt{1+\\ln x}} dx\\)";
+    questionInput.value = subjectConfig[currentSubject].example;
+});
+subjectButtons.forEach(button => {
+    button.addEventListener("click", () => {
+        currentSubject = button.dataset.subject || "math";
+        localStorage.setItem("mathmentor_subject", currentSubject);
+        updateSubjectView();
+    });
 });
 solveBtn.addEventListener("click", solveQuestion);
 addWrongBtn.addEventListener("click", addWrongQuestion);
@@ -457,7 +480,15 @@ wrongList.addEventListener("click", async event => {
 });
 
 document.addEventListener("DOMContentLoaded", async () => {
+    updateSubjectView();
     updateAuthView();
     await loadWrongQuestions();
     renderMath(document.body);
 });
+
+function updateSubjectView() {
+    subjectButtons.forEach(button => {
+        button.classList.toggle("active", button.dataset.subject === currentSubject);
+    });
+    questionInput.placeholder = subjectConfig[currentSubject].placeholder;
+}

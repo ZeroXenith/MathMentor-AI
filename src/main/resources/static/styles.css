@@ -146,6 +146,32 @@ textarea:focus {
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
+.subject-switch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 12px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.subject-btn {
+    min-height: 34px;
+    border: 0;
+    border-radius: 6px;
+    color: var(--muted);
+    background: transparent;
+    cursor: pointer;
+}
+
+.subject-btn.active {
+    color: #fff;
+    background: var(--accent);
+    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.18);
+}
+
 .primary-btn,
 .ghost-btn {
     display: inline-flex;

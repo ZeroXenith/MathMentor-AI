@@ -38,39 +38,21 @@ public class AiService {
     }
 
     public AiSolution solve(String question) {
+        return solve(question, "math");
+    }
+
+    public AiSolution solve(String question, String subject) {
+        String normalizedSubject = normalizeSubject(subject);
         requireApiKeyOrMock();
 
         if (properties.isMockEnabled() && !StringUtils.hasText(properties.getApiKey())) {
-            return mockSolution(question);
+            return mockSolution(question, normalizedSubject);
         }
 
-        String prompt = """
-                You are a careful Chinese math teacher.
-                Solve the user's math problem and return only one valid JSON object.
-                Requirements:
-                1. All visible text must be Simplified Chinese.
-                2. Use LaTeX for math expressions.
-                3. Inline formulas use \\( ... \\), display formulas use \\[ ... \\].
-                4. explanation must be Markdown with clear steps.
-                5. Do not wrap the JSON in a Markdown code block.
-                6. Never use plain parentheses like (u = ln x) or square brackets like [formula] as math delimiters.
-
-                JSON schema:
-                {
-                  "questionType": "题型",
-                  "difficulty": "简单/中等/困难",
-                  "finalAnswer": "最终答案",
-                  "explanation": "详细解析",
-                  "knowledgePoints": ["知识点"],
-                  "commonMistakes": ["易错点"]
-                }
-
-                User problem:
-                """ + question;
-
         try {
-            String content = chat(prompt, true);
+            String content = chat(buildSolvePrompt(question, normalizedSubject), true);
             AiSolution solution = parseSolution(content, question);
+            solution.setSubject(normalizedSubject);
             if (!StringUtils.hasText(solution.getQuestion())) {
                 solution.setQuestion(question);
             }
@@ -90,13 +72,21 @@ public class AiService {
             return mockAdvice(stats);
         }
 
+        String subject = wrongQuestions.stream()
+                .map(WrongQuestion::getSubject)
+                .filter(StringUtils::hasText)
+                .findFirst()
+                .orElse("math");
+
         String prompt = """
                 You are a Chinese study diagnosis teacher.
-                Based on the wrong-question knowledge-point statistics, write a review suggestion within 150 Chinese characters.
+                Write a review suggestion within 150 Chinese characters.
+                Subject: %s
                 Focus on weak knowledge points, review order, and practice method.
 
-                Statistics:
-                """ + stats;
+                Wrong-question statistics:
+                %s
+                """.formatted(subject, stats);
         try {
             return chat(prompt, false);
         } catch (Exception ex) {
@@ -105,22 +95,129 @@ public class AiService {
     }
 
     public List<AiSolution> generatePractice(List<WrongQuestion> wrongQuestions, Map<String, Long> stats) {
-        String mainPoint = stats.keySet().stream().findFirst().orElse("一元二次方程");
+        String subject = wrongQuestions.stream()
+                .map(WrongQuestion::getSubject)
+                .filter(StringUtils::hasText)
+                .findFirst()
+                .orElse("math");
+        String mainPoint = stats.keySet().stream().findFirst().orElse("math".equals(subject) ? "一元二次方程" : "基础语法");
 
         requireApiKeyOrMock();
         if (properties.isMockEnabled() && !StringUtils.hasText(properties.getApiKey())) {
-            return mockPractice(mainPoint);
+            return mockPractice(mainPoint, subject);
         }
 
-        String prompt = """
+        try {
+            String content = chat(buildPracticePrompt(subject, stats), true);
+            JsonNode root = objectMapper.readTree(extractJson(content));
+            JsonNode items = root.isArray() ? root : root.path("items");
+            List<AiSolution> result = new ArrayList<>();
+            if (items.isArray()) {
+                for (JsonNode node : items) {
+                    AiSolution solution = objectMapper.treeToValue(node, AiSolution.class);
+                    solution.setSubject(subject);
+                    result.add(solution);
+                }
+            }
+            return result.isEmpty() ? mockPractice(mainPoint, subject) : result;
+        } catch (Exception ex) {
+            throw aiUnavailable(ex);
+        }
+    }
+
+    private String buildSolvePrompt(String question, String subject) {
+        if ("english".equals(subject)) {
+            return """
+                    You are a careful Chinese English teacher.
+                    Analyze the user's English learning question and return only one valid JSON object.
+                    Requirements:
+                    1. All explanations must be in Simplified Chinese.
+                    2. Keep original English words, sentences, or options unchanged when useful.
+                    3. explanation must be Markdown with clear sections.
+                    4. Do not wrap the JSON in a Markdown code block.
+
+                    JSON schema:
+                    {
+                      "subject": "english",
+                      "questionType": "题型",
+                      "difficulty": "简单/中等/困难",
+                      "finalAnswer": "最终答案",
+                      "explanation": "详细解析",
+                      "knowledgePoints": ["知识点"],
+                      "commonMistakes": ["易错点"]
+                    }
+
+                    User problem:
+                    %s
+                    """.formatted(question);
+        }
+
+        return """
+                You are a careful Chinese math teacher.
+                Solve the user's math problem and return only one valid JSON object.
+                Requirements:
+                1. All visible text must be Simplified Chinese.
+                2. Use LaTeX for math expressions.
+                3. Inline formulas use \\( ... \\), display formulas use \\[ ... \\].
+                4. explanation must be Markdown with clear steps.
+                5. Do not wrap the JSON in a Markdown code block.
+                6. Never use plain parentheses like (u = ln x) or square brackets like [formula] as math delimiters.
+
+                JSON schema:
+                {
+                  "subject": "math",
+                  "questionType": "题型",
+                  "difficulty": "简单/中等/困难",
+                  "finalAnswer": "最终答案",
+                  "explanation": "详细解析",
+                  "knowledgePoints": ["知识点"],
+                  "commonMistakes": ["易错点"]
+                }
+
+                User problem:
+                %s
+                """.formatted(question);
+    }
+
+    private String buildPracticePrompt(String subject, Map<String, Long> stats) {
+        if ("english".equals(subject)) {
+            return """
+                    You are a Chinese English practice writer.
+                    Generate 3 reinforcement English practice questions based on the weak knowledge points.
+                    Return only one valid JSON object. Do not wrap it in a Markdown code block.
+
+                    JSON schema:
+                    {
+                      "items": [
+                        {
+                          "subject": "english",
+                          "question": "练习题",
+                          "questionType": "题型",
+                          "difficulty": "简单/中等/困难",
+                          "finalAnswer": "答案",
+                          "explanation": "中文解析，Markdown",
+                          "knowledgePoints": ["知识点"],
+                          "commonMistakes": ["易错点"]
+                        }
+                      ]
+                    }
+
+                    Weak-point statistics:
+                    %s
+                    """.formatted(stats);
+        }
+
+        return """
                 You are a Chinese math problem writer.
                 Generate 3 reinforcement practice problems based on the weak knowledge points.
                 Return only one valid JSON object. Do not wrap it in a Markdown code block.
+                Formula output rule: use only \\( ... \\) for inline math and \\[ ... \\] for display math.
 
                 JSON schema:
                 {
                   "items": [
                     {
+                      "subject": "math",
                       "question": "题目，公式使用 LaTeX",
                       "questionType": "题型",
                       "difficulty": "简单/中等/困难",
@@ -131,31 +228,17 @@ public class AiService {
                     }
                   ]
                 }
-                Formula output rule: use only \\( ... \\) for inline math and \\[ ... \\] for display math.
 
                 Weak-point statistics:
-                """ + stats;
-        try {
-            String content = chat(prompt, true);
-            JsonNode root = objectMapper.readTree(extractJson(content));
-            JsonNode items = root.isArray() ? root : root.path("items");
-            List<AiSolution> result = new ArrayList<>();
-            if (items.isArray()) {
-                for (JsonNode node : items) {
-                    result.add(objectMapper.treeToValue(node, AiSolution.class));
-                }
-            }
-            return result.isEmpty() ? mockPractice(mainPoint) : result;
-        } catch (Exception ex) {
-            throw aiUnavailable(ex);
-        }
+                %s
+                """.formatted(stats);
     }
 
     private String chat(String prompt, boolean jsonObject) throws IOException, InterruptedException {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("model", properties.getModel());
         payload.put("messages", List.of(
-                Map.of("role", "system", "content", "Return exactly what the user asks for. Keep math formulas in LaTeX."),
+                Map.of("role", "system", "content", "Return exactly what the user asks for. Keep output concise and structured."),
                 Map.of("role", "user", "content", prompt)
         ));
         payload.put("temperature", 0.2);
@@ -269,8 +352,30 @@ public class AiService {
         return trimmed;
     }
 
-    private AiSolution mockSolution(String question) {
+    private String normalizeSubject(String subject) {
+        if (!StringUtils.hasText(subject)) {
+            return "math";
+        }
+        String value = subject.trim().toLowerCase();
+        return "english".equals(value) ? "english" : "math";
+    }
+
+    private AiSolution mockSolution(String question, String subject) {
+        if ("english".equals(subject)) {
+            AiSolution solution = new AiSolution();
+            solution.setSubject("english");
+            solution.setQuestion(question);
+            solution.setQuestionType("语法题");
+            solution.setDifficulty("中等");
+            solution.setFinalAnswer("建议先判断句子结构，再定位谓语、从句和关键词。");
+            solution.setKnowledgePoints(List.of("句子结构", "语法分析", "阅读理解"));
+            solution.setCommonMistakes(List.of("忽略上下文", "只翻译单词不分析句子结构"));
+            solution.setExplanation("### 解析思路\n先划分主干，再处理修饰成分，最后结合上下文确定答案。");
+            return solution;
+        }
+
         AiSolution solution = new AiSolution();
+        solution.setSubject("math");
         solution.setQuestion(question);
         solution.setQuestionType("解答题");
         solution.setDifficulty("中等");
@@ -291,12 +396,6 @@ public class AiService {
                 x^2 - 5x + 6 = (x-2)(x-3)
                 \\]
 
-                因此：
-
-                \\[
-                (x-2)(x-3)=0
-                \\]
-
                 所以最终得到 \\(x=2\\) 或 \\(x=3\\)。
                 """);
         return solution;
@@ -304,26 +403,34 @@ public class AiService {
 
     private String mockAdvice(Map<String, Long> stats) {
         String mainPoint = stats.keySet().stream().findFirst().orElse("基础概念");
-        return "当前薄弱点集中在“" + mainPoint + "”。建议先复习对应公式和基本题型，再做 3 到 5 道同类变式题。";
+        return "当前薄弱点集中在“" + mainPoint + "”。建议先复习对应概念和典型题，再做 3 到 5 道同类变式练习。";
     }
 
-    private List<AiSolution> mockPractice(String knowledgePoint) {
-        List<AiSolution> list = new ArrayList<>();
-        list.add(mockPracticeItem("求方程 \\(x^2-7x+12=0\\) 的解。", "\\(x=3\\) 或 \\(x=4\\)", knowledgePoint));
-        list.add(mockPracticeItem("已知 \\((x-1)(x+5)=0\\)，求 \\(x\\) 的值。", "\\(x=1\\) 或 \\(x=-5\\)", knowledgePoint));
-        list.add(mockPracticeItem("求方程 \\(2x^2-8x=0\\) 的解。", "\\(x=0\\) 或 \\(x=4\\)", knowledgePoint));
-        return list;
+    private List<AiSolution> mockPractice(String knowledgePoint, String subject) {
+        if ("english".equals(subject)) {
+            return List.of(
+                    mockPracticeItem("Choose the best answer: I have lived here ___ 2020.", "since", knowledgePoint, "english"),
+                    mockPracticeItem("Translate: Practice makes perfect.", "熟能生巧。", knowledgePoint, "english"),
+                    mockPracticeItem("Find the main clause: Although it was raining, we went out.", "we went out", knowledgePoint, "english")
+            );
+        }
+        return List.of(
+                mockPracticeItem("求方程 \\(x^2-7x+12=0\\) 的解。", "\\(x=3\\) 或 \\(x=4\\)", knowledgePoint, "math"),
+                mockPracticeItem("已知 \\((x-1)(x+5)=0\\)，求 \\(x\\) 的值。", "\\(x=1\\) 或 \\(x=-5\\)", knowledgePoint, "math"),
+                mockPracticeItem("求方程 \\(2x^2-8x=0\\) 的解。", "\\(x=0\\) 或 \\(x=4\\)", knowledgePoint, "math")
+        );
     }
 
-    private AiSolution mockPracticeItem(String question, String answer, String knowledgePoint) {
+    private AiSolution mockPracticeItem(String question, String answer, String knowledgePoint, String subject) {
         AiSolution solution = new AiSolution();
+        solution.setSubject(subject);
         solution.setQuestion(question);
         solution.setQuestionType("强化练习");
         solution.setDifficulty("中等");
         solution.setFinalAnswer(answer);
         solution.setKnowledgePoints(List.of(knowledgePoint));
-        solution.setCommonMistakes(List.of("漏解", "符号计算错误"));
-        solution.setExplanation("将方程化为乘积等于零的形式，利用 \\(ab=0\\) 可得 \\(a=0\\) 或 \\(b=0\\)，再分别求解。");
+        solution.setCommonMistakes(List.of("审题不细", "步骤不完整"));
+        solution.setExplanation("围绕薄弱知识点进行同类练习，完成后对照解析复盘错误原因。");
         return solution;
     }
 }

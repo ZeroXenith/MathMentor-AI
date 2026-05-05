@@ -7,7 +7,7 @@ public final class Requests {
     private Requests() {
     }
 
-    public record SolveRequest(@NotBlank String question) {
+    public record SolveRequest(@NotBlank String question, String subject) {
     }
 
     public record WrongQuestionRequest(AiSolution solution, String mistakeReason) {

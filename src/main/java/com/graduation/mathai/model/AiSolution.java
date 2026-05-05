@@ -6,6 +6,7 @@ import java.util.List;
 
 public class AiSolution {
     private long id;
+    private String subject = "math";
     private String question;
     private String questionType;
     private String difficulty;
@@ -21,6 +22,14 @@ public class AiSolution {
 
     public void setId(long id) {
         this.id = id;
+    }
+
+    public String getSubject() {
+        return subject;
+    }
+
+    public void setSubject(String subject) {
+        this.subject = subject;
     }
 
     public String getQuestion() {

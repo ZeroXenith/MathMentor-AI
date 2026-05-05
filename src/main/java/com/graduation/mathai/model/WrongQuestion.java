@@ -26,6 +26,9 @@ public class WrongQuestion {
     @Column(nullable = false)
     private long userId;
 
+    @Column(length = 32)
+    private String subject = "math";
+
     @Column(columnDefinition = "TEXT")
     private String question;
 
@@ -68,6 +71,14 @@ public class WrongQuestion {
 
     public void setUserId(long userId) {
         this.userId = userId;
+    }
+
+    public String getSubject() {
+        return subject;
+    }
+
+    public void setSubject(String subject) {
+        this.subject = subject;
     }
 
     public String getQuestion() {

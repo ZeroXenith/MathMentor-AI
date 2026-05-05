@@ -38,7 +38,7 @@ public class ApiController {
 
     @PostMapping("/solve")
     public AiSolution solve(@Valid @RequestBody SolveRequest request) {
-        return aiService.solve(request.question());
+        return aiService.solve(request.question(), request.subject());
     }
 
     @GetMapping("/wrong-questions")
