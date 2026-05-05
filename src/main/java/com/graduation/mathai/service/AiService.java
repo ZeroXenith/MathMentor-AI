@@ -53,6 +53,7 @@ public class AiService {
                 3. Inline formulas use \\( ... \\), display formulas use \\[ ... \\].
                 4. explanation must be Markdown with clear steps.
                 5. Do not wrap the JSON in a Markdown code block.
+                6. Never use plain parentheses like (u = ln x) or square brackets like [formula] as math delimiters.
 
                 JSON schema:
                 {
@@ -130,6 +131,7 @@ public class AiService {
                     }
                   ]
                 }
+                Formula output rule: use only \\( ... \\) for inline math and \\[ ... \\] for display math.
 
                 Weak-point statistics:
                 """ + stats;

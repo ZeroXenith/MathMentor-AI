@@ -216,6 +216,32 @@ textarea:focus {
     font-weight: 700;
 }
 
+.answer-layout {
+    display: grid;
+    gap: 14px;
+}
+
+.answer-section {
+    border-top: 1px solid #edf0f6;
+    padding-top: 2px;
+}
+
+.answer-section:first-child {
+    border-top: 0;
+}
+
+.final-answer {
+    border: 1px solid #b9d5ff;
+    border-radius: 8px;
+    padding: 12px 14px;
+    background: #f7fbff;
+}
+
+.final-answer .section-label {
+    margin-top: 0;
+    color: var(--accent-strong);
+}
+
 .markdown-body {
     line-height: 1.8;
     overflow-wrap: anywhere;
@@ -230,10 +256,26 @@ textarea:focus {
     margin: 8px 0;
 }
 
+.markdown-body ol,
+.markdown-body ul {
+    margin: 8px 0 8px 20px;
+    padding: 0;
+}
+
+.markdown-body li {
+    margin: 6px 0;
+}
+
 .markdown-body .katex-display {
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 4px 0;
+    padding: 8px 0;
+    margin: 8px 0;
+}
+
+.final-answer .katex-display {
+    margin: 2px 0;
+    font-size: 1.08em;
 }
 
 .wrong-list {

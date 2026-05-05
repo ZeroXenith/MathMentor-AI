@@ -64,6 +64,7 @@ function renderMath(container = document.body) {
     renderMathInElement(container, {
         delimiters: [
             {left: "$$", right: "$$", display: true},
+            {left: "$", right: "$", display: false},
             {left: "\\[", right: "\\]", display: true},
             {left: "\\(", right: "\\)", display: false}
         ],
@@ -72,7 +73,110 @@ function renderMath(container = document.body) {
 }
 
 function markdown(text) {
-    return marked.parse(text || "");
+    const normalized = normalizeMathText(text || "");
+    const protectedMath = protectMath(normalized);
+    let html = marked.parse(protectedMath.text);
+    protectedMath.items.forEach((item, index) => {
+        html = html.replace(`@@MATHBLOCK${index}@@`, renderFormula(item.formula, item.display));
+    });
+    return html;
+}
+
+function normalizeMathText(value) {
+    let text = String(value ?? "");
+
+    text = text.replace(/\r\n/g, "\n");
+
+    // Fix common punctuation mistakes from LLM output.
+    text = text.replace(/\\left\s*\(/g, "\\left(").replace(/\\right\s*\)/g, "\\right)");
+    text = text.replace(/,\s*dt/g, "\\,dt").replace(/,\s*dx/g, "\\,dx").replace(/,\s*du/g, "\\,du");
+
+    // If a standalone answer contains LaTeX commands but no delimiter, render it as display math.
+    const trimmed = text.trim();
+    const hasDelimiter = /\\\(|\\\[|\$/.test(trimmed);
+    const looksLikeFormula = /\\[a-zA-Z]+|[\^_{}=]/.test(trimmed);
+    const isSingleLine = !trimmed.includes("\n");
+    if (trimmed && isSingleLine && looksLikeFormula && !hasDelimiter) {
+        return `$$${trimmed}$$`;
+    }
+
+    return text;
+}
+
+function protectMath(text) {
+    const items = [];
+    let result = text;
+
+    const push = (formula, display) => {
+        const id = items.length;
+        items.push({formula: cleanupFormula(formula), display});
+        return `@@MATHBLOCK${id}@@`;
+    };
+
+    result = result.replace(/\$\$([\s\S]+?)\$\$/g, (_, formula) => push(formula, true));
+    result = result.replace(/\\\[([\s\S]+?)\\\]/g, (_, formula) => push(formula, true));
+    result = result.replace(/\\\(([\s\S]+?)\\\)/g, (_, formula) => push(formula, false));
+    result = result.replace(/\$([^$\n]+?)\$/g, (_, formula) => push(formula, false));
+
+    // LLMs often use [ \int ... ] as math without real TeX delimiters.
+    result = result.replace(/\[\s*([^\]\n]*(?:\\[a-zA-Z]+|[\^_{}=+\-*/]|sqrt|frac|ln|int|sum|lim)[^\]\n]*)\s*\]/g, (_, formula) => push(formula, true));
+
+    // Inline math written as ( u = \ln x ).
+    result = result.replace(/\(\s*([^()\n]*(?:\\[a-zA-Z]+|[\^_{}=+\-*/]|sqrt|frac|ln|int|sum|lim)[^()\n]*)\s*\)/g, (_, formula) => push(formula, false));
+
+    // Standalone raw LaTeX answer.
+    if (items.length === 0 && looksLikeStandaloneFormula(result)) {
+        result = push(result, true);
+    }
+
+    // Inline raw TeX fragments such as \frac{...}{...}, \int ... dx, \sqrt{...}.
+    result = result.replace(/((?:\\(?:frac|sqrt|int|sum|lim|left|right|ln|cdot|times|pm|alpha|beta|theta|pi)\b|[A-Za-z0-9{}_^+\-*/=]+\s*(?:\^|_|=))[^\u4e00-\u9fa5，。；：、]*?(?:\s*\+\s*C)?)/g, (match) => {
+        const cleaned = match.trim();
+        if (!looksLikeFormula(cleaned) || cleaned.length < 3) {
+            return match;
+        }
+        return push(cleaned, cleaned.length > 36 || cleaned.includes("\\int"));
+    });
+
+    return {text: result, items};
+}
+
+function looksLikeStandaloneFormula(text) {
+    const trimmed = text.trim();
+    return !trimmed.includes("\n") && looksLikeFormula(trimmed);
+}
+
+function looksLikeFormula(text) {
+    return /\\[a-zA-Z]+|[\^_{}=]/.test(text);
+}
+
+function cleanupFormula(formula) {
+    return String(formula ?? "")
+        .trim()
+        .replace(/^\[|\]$/g, "")
+        .replace(/^\(|\)$/g, "")
+        .replace(/,\s*(dt|dx|du|dy)/g, "\\,$1")
+        .replace(/\s+/g, " ");
+}
+
+function renderFormula(formula, display) {
+    if (!window.katex) {
+        return escapeHtml(formula);
+    }
+    try {
+        return katex.renderToString(formula, {
+            displayMode: display,
+            throwOnError: false,
+            strict: false,
+            output: "htmlAndMathml"
+        });
+    } catch (error) {
+        return escapeHtml(formula);
+    }
+}
+
+function renderTextBlock(text) {
+    return `<div class="markdown-body">${markdown(text)}</div>`;
 }
 
 function tags(items = [], warn = false) {
@@ -97,14 +201,24 @@ function renderSolution(solution) {
                 <span class="tag">${escapeHtml(solution.difficulty || "未标注难度")}</span>
                 ${tags(solution.knowledgePoints)}
             </div>
-            <div class="section-label">题目</div>
-            <div class="markdown-body">${markdown(solution.question)}</div>
-            <div class="section-label">最终答案</div>
-            <div class="markdown-body">${markdown(solution.finalAnswer)}</div>
-            <div class="section-label">解析</div>
-            <div class="markdown-body">${markdown(solution.explanation)}</div>
-            <div class="section-label">易错点</div>
-            <div class="meta-row">${tags(solution.commonMistakes, true)}</div>
+            <div class="answer-layout">
+                <section class="answer-section">
+                    <div class="section-label">题目</div>
+                    ${renderTextBlock(solution.question)}
+                </section>
+                <section class="answer-section final-answer">
+                    <div class="section-label">最终答案</div>
+                    ${renderTextBlock(solution.finalAnswer)}
+                </section>
+                <section class="answer-section">
+                    <div class="section-label">答案解析</div>
+                    ${renderTextBlock(solution.explanation)}
+                </section>
+                <section class="answer-section">
+                    <div class="section-label">易错点</div>
+                    <div class="meta-row">${tags(solution.commonMistakes, true)}</div>
+                </section>
+            </div>
         </article>
     `;
     renderMath(solutionBox);
@@ -159,7 +273,7 @@ async function loadWrongQuestions() {
             <h3>${escapeHtml(item.question)}</h3>
             <div class="meta-row">${tags(item.knowledgePoints)}${item.mastered ? '<span class="tag">已掌握</span>' : '<span class="tag warn">待巩固</span>'}</div>
             <div class="section-label">答案</div>
-            <div class="markdown-body">${markdown(item.finalAnswer)}</div>
+            ${renderTextBlock(item.finalAnswer)}
             <div class="section-label">错因</div>
             <div>${escapeHtml(item.mistakeReason || "暂未填写")}</div>
             <div class="card-actions">
@@ -187,7 +301,7 @@ async function loadAnalysis() {
             <div class="section-label">知识点分布</div>
             <div class="meta-row">${statRows}</div>
             <div class="section-label">AI 建议</div>
-            <div class="markdown-body">${markdown(data.advice)}</div>
+            ${renderTextBlock(data.advice)}
             <div class="section-label">复习计划</div>
             <ol>${(data.reviewPlan || []).map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ol>
         `;
@@ -210,9 +324,9 @@ async function generatePractice() {
                 <h3>练习 ${index + 1}：${escapeHtml(item.question)}</h3>
                 <div class="meta-row">${tags(item.knowledgePoints)}<span class="tag">${escapeHtml(item.difficulty || "中等")}</span></div>
                 <div class="section-label">答案</div>
-                <div class="markdown-body">${markdown(item.finalAnswer)}</div>
+                ${renderTextBlock(item.finalAnswer)}
                 <div class="section-label">解析</div>
-                <div class="markdown-body">${markdown(item.explanation)}</div>
+                ${renderTextBlock(item.explanation)}
             </article>
         `).join("");
         renderMath(practiceBox);
@@ -231,7 +345,7 @@ function setBusy(button, busy, text) {
 }
 
 fillExampleBtn.addEventListener("click", () => {
-    questionInput.value = "求方程 \\(x^2-5x+6=0\\) 的解，并写出完整解题步骤。";
+    questionInput.value = "求不定积分：\\(\\int \\frac{\\ln x}{x\\sqrt{1+\\ln x}} dx\\)";
 });
 solveBtn.addEventListener("click", solveQuestion);
 addWrongBtn.addEventListener("click", addWrongQuestion);

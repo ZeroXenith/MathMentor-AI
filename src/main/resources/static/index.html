@@ -14,7 +14,7 @@
             <h1>MathMentor AI</h1>
             <p>面向数学学习场景的 AI 解题、错题诊断与强化练习系统</p>
         </div>
-        <div class="status-pill">Portfolio</div>
+        <div class="status-pill">基础版</div>
     </header>
 
     <section class="workspace">
@@ -23,9 +23,9 @@
                 <h2>题目输入</h2>
                 <button class="ghost-btn" id="fillExampleBtn">示例</button>
             </div>
-            <textarea id="questionInput" spellcheck="false" placeholder="输入数学题，公式可使用 LaTeX，例如：求方程 \(x^2-5x+6=0\) 的解。"></textarea>
+            <textarea id="questionInput" spellcheck="false" placeholder="输入数学题，公式可使用 LaTeX，例如：求不定积分：\(\int \frac{\ln x}{x\sqrt{1+\ln x}} dx\)"></textarea>
             <button class="primary-btn" id="solveBtn">AI 解题</button>
-            <p class="hint">后续可扩展 PDF、Word、图片 OCR 上传；基础版先保证题目文本和公式解析稳定。</p>
+            <p class="hint">基础版先保证题目文本、LaTeX 公式、答案解析、错题本和强化练习稳定；后续可扩展 PDF、Word、图片 OCR 上传。</p>
         </section>
 
         <section class="panel result-panel">
@@ -67,6 +67,6 @@
 <script defer src="https://cdn.jsdelivr.net/npm/marked@14.1.2/marked.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
-<script defer src="/app.js"></script>
+<script defer src="/app.js?v=20260505-katex-direct"></script>
 </body>
 </html>
