@@ -81,7 +81,11 @@ function requestHeaders(json = true) {
 
 async function parseResponse(response) {
     if (!response.ok) {
-        throw new Error(await responseMessage(response));
+        const message = await responseMessage(response);
+        if (response.status === 401) {
+            clearExpiredAuth();
+        }
+        throw new Error(message);
     }
     return response.json();
 }
@@ -407,6 +411,9 @@ async function loginOrRegister(mode) {
     setBusy(targetButton, true, mode === "login" ? "登录中" : "注册中");
     try {
         auth = await api.post(`/api/auth/${mode}`, {username, password});
+        if (!auth?.token || !auth?.userId) {
+            throw new Error("登录状态创建失败，请重新登录。");
+        }
         localStorage.setItem("mathmentor_auth", JSON.stringify(auth));
         passwordInput.value = "";
         updateAuthView();
@@ -420,6 +427,10 @@ async function loginOrRegister(mode) {
 }
 
 function logout() {
+    clearExpiredAuth();
+}
+
+function clearExpiredAuth() {
     auth = null;
     localStorage.removeItem("mathmentor_auth");
     updateAuthView();

@@ -27,14 +27,14 @@ public class AuthService {
         String normalizedUsername = normalizeUsername(username);
         validatePassword(password);
         if (userRepository.existsByUsername(normalizedUsername)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "用户名已存在");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "用户名已存在，请直接登录");
         }
 
         AppUser user = new AppUser();
         user.setUsername(normalizedUsername);
         user.setPasswordHash(passwordEncoder.encode(password));
-        userRepository.save(user);
-        return createSession(user);
+        AppUser savedUser = userRepository.saveAndFlush(user);
+        return createSession(savedUser);
     }
 
     public AuthResponse login(String username, String password) {
@@ -59,6 +59,9 @@ public class AuthService {
     }
 
     private AuthResponse createSession(AppUser user) {
+        if (user.getId() <= 0) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "用户会话创建失败，请重新登录");
+        }
         String token = UUID.randomUUID().toString().replace("-", "");
         sessions.put(token, user.getId());
         return new AuthResponse(token, user.getId(), user.getUsername());
