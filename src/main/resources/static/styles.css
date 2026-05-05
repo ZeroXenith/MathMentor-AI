@@ -63,6 +63,34 @@ input {
     background: var(--soft);
 }
 
+.auth-panel {
+    display: grid;
+    grid-template-columns: auto 120px 120px auto auto auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.auth-user {
+    color: var(--muted);
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.auth-panel input {
+    width: 100%;
+    min-height: 36px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 7px 10px;
+    background: #fff;
+    outline: none;
+}
+
+.auth-panel input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
 .workspace {
     display: grid;
     grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.25fr) minmax(300px, 0.95fr);
@@ -368,6 +396,15 @@ textarea:focus {
     .topbar {
         align-items: flex-start;
         flex-direction: column;
+    }
+
+    .auth-panel {
+        width: 100%;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .auth-user {
+        grid-column: 1 / -1;
     }
 
     .topbar h1 {

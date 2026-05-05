@@ -3,66 +3,61 @@ package com.graduation.mathai.service;
 import com.graduation.mathai.dto.AnalysisResponse;
 import com.graduation.mathai.model.AiSolution;
 import com.graduation.mathai.model.WrongQuestion;
+import com.graduation.mathai.repository.WrongQuestionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 @Service
 public class WrongQuestionService {
-    private final AtomicLong idGenerator = new AtomicLong(1);
-    private final Map<Long, WrongQuestion> storage = new ConcurrentHashMap<>();
+    private final WrongQuestionRepository wrongQuestionRepository;
     private final AiService aiService;
 
-    public WrongQuestionService(AiService aiService) {
+    public WrongQuestionService(WrongQuestionRepository wrongQuestionRepository, AiService aiService) {
+        this.wrongQuestionRepository = wrongQuestionRepository;
         this.aiService = aiService;
     }
 
-    public List<WrongQuestion> list() {
-        return storage.values().stream()
-                .sorted(Comparator.comparing(WrongQuestion::getCreatedAt).reversed())
-                .toList();
+    public List<WrongQuestion> list(long userId) {
+        return wrongQuestionRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 
-    public WrongQuestion add(AiSolution solution, String mistakeReason) {
+    public WrongQuestion add(long userId, AiSolution solution, String mistakeReason) {
         WrongQuestion item = new WrongQuestion();
-        item.setId(idGenerator.getAndIncrement());
+        item.setUserId(userId);
         item.setQuestion(solution.getQuestion());
         item.setFinalAnswer(solution.getFinalAnswer());
         item.setExplanation(solution.getExplanation());
         item.setKnowledgePoints(solution.getKnowledgePoints());
         item.setMistakeReason(StringUtils.hasText(mistakeReason) ? mistakeReason : "暂未填写");
-        storage.put(item.getId(), item);
-        return item;
+        return wrongQuestionRepository.save(item);
     }
 
-    public WrongQuestion update(long id, String mistakeReason, Boolean mastered) {
-        WrongQuestion item = storage.get(id);
-        if (item == null) {
-            throw new IllegalArgumentException("错题不存在：" + id);
-        }
+    public WrongQuestion update(long userId, long id, String mistakeReason, Boolean mastered) {
+        WrongQuestion item = wrongQuestionRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new IllegalArgumentException("错题不存在：" + id));
         if (mistakeReason != null) {
             item.setMistakeReason(mistakeReason);
         }
         if (mastered != null) {
             item.setMastered(mastered);
         }
-        return item;
+        return wrongQuestionRepository.save(item);
     }
 
-    public void delete(long id) {
-        storage.remove(id);
+    public void delete(long userId, long id) {
+        WrongQuestion item = wrongQuestionRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new IllegalArgumentException("错题不存在：" + id));
+        wrongQuestionRepository.delete(item);
     }
 
-    public AnalysisResponse analyze() {
-        List<WrongQuestion> wrongQuestions = list();
+    public AnalysisResponse analyze(long userId) {
+        List<WrongQuestion> wrongQuestions = list(userId);
         Map<String, Long> stats = knowledgeStats(wrongQuestions);
         String advice = aiService.buildAdvice(wrongQuestions, stats);
         List<String> reviewPlan = buildReviewPlan(stats);
@@ -70,8 +65,8 @@ public class WrongQuestionService {
         return new AnalysisResponse(wrongQuestions.size(), masteredCount, stats, advice, reviewPlan);
     }
 
-    public List<AiSolution> generatePractice() {
-        List<WrongQuestion> wrongQuestions = list();
+    public List<AiSolution> generatePractice(long userId) {
+        List<WrongQuestion> wrongQuestions = list(userId);
         return aiService.generatePractice(wrongQuestions, knowledgeStats(wrongQuestions));
     }
 

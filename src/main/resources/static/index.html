@@ -14,7 +14,14 @@
             <h1>MathMentor AI</h1>
             <p>面向数学学习场景的 AI 解题、错题诊断与强化练习系统</p>
         </div>
-        <div class="status-pill">基础版</div>
+        <div class="auth-panel">
+            <div class="auth-user" id="authUser">未登录</div>
+            <input id="usernameInput" type="text" placeholder="用户名">
+            <input id="passwordInput" type="password" placeholder="密码">
+            <button class="ghost-btn" id="loginBtn">登录</button>
+            <button class="ghost-btn" id="registerBtn">注册</button>
+            <button class="ghost-btn" id="logoutBtn" hidden>退出</button>
+        </div>
     </header>
 
     <section class="workspace">
@@ -67,6 +74,6 @@
 <script defer src="https://cdn.jsdelivr.net/npm/marked@14.1.2/marked.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
-<script defer src="/app.js?v=20260505-katex-direct"></script>
+<script defer src="/app.js?v=20260505-auth-db"></script>
 </body>
 </html>

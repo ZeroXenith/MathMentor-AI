@@ -15,4 +15,10 @@ public final class Requests {
 
     public record UpdateWrongQuestionRequest(String mistakeReason, Boolean mastered) {
     }
+
+    public record AuthRequest(@NotBlank String username, @NotBlank String password) {
+    }
+
+    public record AuthResponse(String token, long userId, String username) {
+    }
 }

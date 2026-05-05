@@ -7,16 +7,24 @@ const addWrongBtn = document.querySelector("#addWrongBtn");
 const refreshBtn = document.querySelector("#refreshBtn");
 const analysisBtn = document.querySelector("#analysisBtn");
 const practiceBtn = document.querySelector("#practiceBtn");
+const loginBtn = document.querySelector("#loginBtn");
+const registerBtn = document.querySelector("#registerBtn");
+const logoutBtn = document.querySelector("#logoutBtn");
+const usernameInput = document.querySelector("#usernameInput");
+const passwordInput = document.querySelector("#passwordInput");
+const authUser = document.querySelector("#authUser");
 const solutionBox = document.querySelector("#solutionBox");
 const wrongList = document.querySelector("#wrongList");
 const analysisBox = document.querySelector("#analysisBox");
 const practiceBox = document.querySelector("#practiceBox");
 
+let auth = JSON.parse(localStorage.getItem("mathmentor_auth") || "null");
+
 const api = {
     async post(url, data = {}) {
         const response = await fetch(url, {
             method: "POST",
-            headers: {"Content-Type": "application/json"},
+            headers: requestHeaders(),
             body: JSON.stringify(data)
         });
         return parseResponse(response);
@@ -24,22 +32,33 @@ const api = {
     async put(url, data = {}) {
         const response = await fetch(url, {
             method: "PUT",
-            headers: {"Content-Type": "application/json"},
+            headers: requestHeaders(),
             body: JSON.stringify(data)
         });
         return parseResponse(response);
     },
     async get(url) {
-        const response = await fetch(url);
+        const response = await fetch(url, {headers: requestHeaders(false)});
         return parseResponse(response);
     },
     async delete(url) {
-        const response = await fetch(url, {method: "DELETE"});
+        const response = await fetch(url, {method: "DELETE", headers: requestHeaders(false)});
         if (!response.ok) {
             throw new Error(await responseMessage(response));
         }
     }
 };
+
+function requestHeaders(json = true) {
+    const headers = {};
+    if (json) {
+        headers["Content-Type"] = "application/json";
+    }
+    if (auth?.token) {
+        headers["X-Auth-Token"] = auth.token;
+    }
+    return headers;
+}
 
 async function parseResponse(response) {
     if (!response.ok) {
@@ -249,6 +268,9 @@ async function addWrongQuestion() {
     if (!currentSolution) {
         return;
     }
+    if (!ensureLoggedIn()) {
+        return;
+    }
     const mistakeReason = prompt("填写错误原因，方便后续分析：", "计算步骤不熟练");
     setBusy(addWrongBtn, true, "保存中");
     try {
@@ -263,6 +285,10 @@ async function addWrongQuestion() {
 }
 
 async function loadWrongQuestions() {
+    if (!auth?.token) {
+        wrongList.innerHTML = `<div class="empty-state">登录后可以保存和查看你的错题本。</div>`;
+        return;
+    }
     const items = await api.get("/api/wrong-questions");
     if (!items.length) {
         wrongList.innerHTML = `<div class="empty-state">错题本为空。解析题目后可以加入这里。</div>`;
@@ -286,6 +312,9 @@ async function loadWrongQuestions() {
 }
 
 async function loadAnalysis() {
+    if (!ensureLoggedIn()) {
+        return;
+    }
     setBusy(analysisBtn, true, "生成中");
     try {
         const data = await api.get("/api/analysis");
@@ -315,6 +344,9 @@ async function loadAnalysis() {
 }
 
 async function generatePractice() {
+    if (!ensureLoggedIn()) {
+        return;
+    }
     setBusy(practiceBtn, true, "生成中");
     try {
         const items = await api.post("/api/practice");
@@ -344,6 +376,58 @@ function setBusy(button, busy, text) {
     button.classList.toggle("loading", busy);
 }
 
+async function loginOrRegister(mode) {
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value;
+    if (!username || !password) {
+        alert("请输入用户名和密码。");
+        return;
+    }
+    const targetButton = mode === "login" ? loginBtn : registerBtn;
+    setBusy(targetButton, true, mode === "login" ? "登录中" : "注册中");
+    try {
+        auth = await api.post(`/api/auth/${mode}`, {username, password});
+        localStorage.setItem("mathmentor_auth", JSON.stringify(auth));
+        passwordInput.value = "";
+        updateAuthView();
+        await loadWrongQuestions();
+        await loadAnalysis();
+    } catch (error) {
+        alert((mode === "login" ? "登录失败：" : "注册失败：") + error.message);
+    } finally {
+        setBusy(targetButton, false, mode === "login" ? "登录" : "注册");
+    }
+}
+
+function logout() {
+    auth = null;
+    localStorage.removeItem("mathmentor_auth");
+    updateAuthView();
+    loadWrongQuestions();
+    analysisBox.textContent = "错题加入后，可自动统计薄弱知识点并生成复习建议。";
+    analysisBox.className = "analysis-box empty-state";
+    practiceBox.textContent = "根据错题知识点生成相似题和解析。";
+    practiceBox.className = "practice-list empty-state";
+}
+
+function updateAuthView() {
+    const loggedIn = Boolean(auth?.token);
+    authUser.textContent = loggedIn ? `当前用户：${auth.username}` : "未登录";
+    usernameInput.hidden = loggedIn;
+    passwordInput.hidden = loggedIn;
+    loginBtn.hidden = loggedIn;
+    registerBtn.hidden = loggedIn;
+    logoutBtn.hidden = !loggedIn;
+}
+
+function ensureLoggedIn() {
+    if (auth?.token) {
+        return true;
+    }
+    alert("请先登录或注册账号。");
+    return false;
+}
+
 fillExampleBtn.addEventListener("click", () => {
     questionInput.value = "求不定积分：\\(\\int \\frac{\\ln x}{x\\sqrt{1+\\ln x}} dx\\)";
 });
@@ -352,6 +436,9 @@ addWrongBtn.addEventListener("click", addWrongQuestion);
 refreshBtn.addEventListener("click", loadWrongQuestions);
 analysisBtn.addEventListener("click", loadAnalysis);
 practiceBtn.addEventListener("click", generatePractice);
+loginBtn.addEventListener("click", () => loginOrRegister("login"));
+registerBtn.addEventListener("click", () => loginOrRegister("register"));
+logoutBtn.addEventListener("click", logout);
 wrongList.addEventListener("click", async event => {
     const button = event.target.closest("button[data-action]");
     if (!button) {
@@ -370,6 +457,7 @@ wrongList.addEventListener("click", async event => {
 });
 
 document.addEventListener("DOMContentLoaded", async () => {
+    updateAuthView();
     await loadWrongQuestions();
     renderMath(document.body);
 });
