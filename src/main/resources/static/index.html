@@ -10,9 +10,12 @@
 <body>
 <main class="app-shell">
     <header class="topbar">
-        <div>
-            <h1>MathMentor AI</h1>
-            <p>面向数学学习场景的 AI 解题、错题诊断与强化练习系统</p>
+        <div class="brand-lockup">
+            <div class="brand-mark">M</div>
+            <div>
+                <h1>MathMentor AI</h1>
+                <p>面向数学学习场景的 AI 解题、错题诊断与强化练习系统</p>
+            </div>
         </div>
         <div class="auth-panel">
             <div class="auth-user" id="authUser">未登录</div>
@@ -36,7 +39,7 @@
             </div>
             <textarea id="questionInput" spellcheck="false" placeholder="输入数学题，公式可使用 LaTeX，例如：求不定积分：\(\int \frac{\ln x}{x\sqrt{1+\ln x}} dx\)"></textarea>
             <button class="primary-btn" id="solveBtn">AI 解题</button>
-            <p class="hint">基础版先保证题目文本、LaTeX 公式、答案解析、错题本和强化练习稳定；后续可扩展 PDF、Word、图片 OCR 上传。</p>
+            <p class="hint">支持文本题目、LaTeX 公式、答案解析、错题沉淀和针对性练习。</p>
         </section>
 
         <section class="panel result-panel">
