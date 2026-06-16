@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    ports:
+      - "18080:18080"
+    environment:
+      - AI_MOCK_ENABLED=true
+      - SERVER_PORT=18080
+    volumes:
+      - mathmentor-data:/app/data
+
+volumes:
+  mathmentor-data:

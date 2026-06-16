@@ -7,6 +7,8 @@ import com.graduation.mathai.repository.WrongQuestionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import com.graduation.mathai.util.SubjectUtils;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -117,6 +119,6 @@ public class WrongQuestionService {
     }
 
     private String normalizeSubject(String subject) {
-        return "english".equalsIgnoreCase(String.valueOf(subject)) ? "english" : "math";
+        return SubjectUtils.normalize(subject);
     }
 }

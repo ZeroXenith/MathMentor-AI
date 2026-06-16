@@ -9,18 +9,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-
 @Service
 public class AuthService {
     private final AppUserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
-    private final Map<String, Long> sessions = new ConcurrentHashMap<>();
+    private final JwtTokenProvider jwtTokenProvider;
 
-    public AuthService(AppUserRepository userRepository) {
+    public AuthService(AppUserRepository userRepository, JwtTokenProvider jwtTokenProvider) {
         this.userRepository = userRepository;
+        this.jwtTokenProvider = jwtTokenProvider;
     }
 
     public AuthResponse register(String username, String password) {
@@ -34,7 +31,7 @@ public class AuthService {
         user.setUsername(normalizedUsername);
         user.setPasswordHash(passwordEncoder.encode(password));
         AppUser savedUser = userRepository.saveAndFlush(user);
-        return createSession(savedUser);
+        return createAuthResponse(savedUser);
     }
 
     public AuthResponse login(String username, String password) {
@@ -44,26 +41,25 @@ public class AuthService {
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "用户名或密码错误");
         }
-        return createSession(user);
+        return createAuthResponse(user);
     }
 
     public long requireUserId(String token) {
         if (!StringUtils.hasText(token)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录");
         }
-        Long userId = sessions.get(token);
+        Long userId = jwtTokenProvider.validateAndGetUserId(token);
         if (userId == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "登录状态已失效，请重新登录");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "登录状态已过期，请重新登录");
         }
         return userId;
     }
 
-    private AuthResponse createSession(AppUser user) {
+    private AuthResponse createAuthResponse(AppUser user) {
         if (user.getId() <= 0) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "用户会话创建失败，请重新登录");
         }
-        String token = UUID.randomUUID().toString().replace("-", "");
-        sessions.put(token, user.getId());
+        String token = jwtTokenProvider.generateToken(user.getId(), user.getUsername());
         return new AuthResponse(token, user.getId(), user.getUsername());
     }
 
