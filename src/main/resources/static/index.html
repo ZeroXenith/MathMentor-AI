@@ -11,19 +11,15 @@
 <main class="app-shell">
     <header class="topbar">
         <div class="brand-lockup">
-            <div class="brand-mark">M</div>
+            <div class="brand-mark" aria-hidden="true"></div>
             <div>
                 <h1>MathMentor AI</h1>
                 <p>面向数学学习场景的 AI 解题、错题诊断与强化练习系统</p>
             </div>
         </div>
-        <div class="auth-panel">
-            <div class="auth-user" id="authUser">未登录</div>
-            <input id="usernameInput" type="text" placeholder="用户名">
-            <input id="passwordInput" type="password" placeholder="密码">
-            <button class="ghost-btn" id="loginBtn">登录</button>
-            <button class="ghost-btn" id="registerBtn">注册</button>
-            <button class="ghost-btn" id="logoutBtn" hidden>退出</button>
+        <div class="mode-badge">
+            <span class="mode-dot"></span>
+            本地模式
         </div>
     </header>
 
@@ -98,6 +94,6 @@
         onerror="this.onerror=null;this.src='https://unpkg.com/katex@0.16.11/dist/katex.min.js';console.warn('KaTeX loaded from fallback CDN')"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
         onerror="this.onerror=null;this.src='https://unpkg.com/katex@0.16.11/dist/contrib/auto-render.min.js';console.warn('KaTeX aut-render loaded from fallback CDN')"></script>
-<script defer src="/app.js?v=20260616-refactor"></script>
+<script defer src="/app.js?v=20260616-redesign"></script>
 </body>
 </html>

@@ -8,12 +8,6 @@ const addWrongBtn = document.querySelector("#addWrongBtn");
 const refreshBtn = document.querySelector("#refreshBtn");
 const analysisBtn = document.querySelector("#analysisBtn");
 const practiceBtn = document.querySelector("#practiceBtn");
-const loginBtn = document.querySelector("#loginBtn");
-const registerBtn = document.querySelector("#registerBtn");
-const logoutBtn = document.querySelector("#logoutBtn");
-const usernameInput = document.querySelector("#usernameInput");
-const passwordInput = document.querySelector("#passwordInput");
-const authUser = document.querySelector("#authUser");
 const subjectButtons = document.querySelectorAll(".subject-btn");
 const solutionBox = document.querySelector("#solutionBox");
 const wrongList = document.querySelector("#wrongList");
@@ -24,21 +18,18 @@ const wrongDetailModal = document.querySelector("#wrongDetailModal");
 const wrongDetailBody = document.querySelector("#wrongDetailBody");
 const closeWrongDetailBtn = document.querySelector("#closeWrongDetailBtn");
 
-let auth = JSON.parse(localStorage.getItem("mathmentor_auth") || "null");
 let currentSubject = localStorage.getItem("mathmentor_subject") || "math";
 
 const subjectConfig = {
     math: {
         label: "数学",
         emptyWrongText: "数学错题本为空。解析数学题后可以加入这里。",
-        loginWrongText: "登录后可以保存和查看你的数学错题本。",
         placeholder: "输入数学题，公式可使用 LaTeX，例如：求不定积分：\\(\\int \\frac{\\ln x}{x\\sqrt{1+\\ln x}} dx\\)",
         example: "求不定积分：\\(\\int \\frac{\\ln x}{x\\sqrt{1+\\ln x}} dx\\)"
     },
     english: {
         label: "英语",
         emptyWrongText: "英语错题本为空。解析英语题后可以加入这里。",
-        loginWrongText: "登录后可以保存和查看你的英语错题本。",
         placeholder: "输入英语题，例如：Analyze the sentence: Although it was raining, we still went out.",
         example: "Analyze the sentence: Although it was raining, we still went out."
     }
@@ -48,7 +39,7 @@ const api = {
     async post(url, data = {}) {
         const response = await fetch(url, {
             method: "POST",
-            headers: requestHeaders(),
+            headers: {"Content-Type": "application/json"},
             body: JSON.stringify(data)
         });
         return parseResponse(response);
@@ -56,41 +47,26 @@ const api = {
     async put(url, data = {}) {
         const response = await fetch(url, {
             method: "PUT",
-            headers: requestHeaders(),
+            headers: {"Content-Type": "application/json"},
             body: JSON.stringify(data)
         });
         return parseResponse(response);
     },
     async get(url) {
-        const response = await fetch(url, {headers: requestHeaders(false)});
+        const response = await fetch(url);
         return parseResponse(response);
     },
     async delete(url) {
-        const response = await fetch(url, {method: "DELETE", headers: requestHeaders(false)});
+        const response = await fetch(url, {method: "DELETE"});
         if (!response.ok) {
             throw new Error(await responseMessage(response));
         }
     }
 };
 
-function requestHeaders(json = true) {
-    const headers = {};
-    if (json) {
-        headers["Content-Type"] = "application/json";
-    }
-    if (auth?.token) {
-        headers["X-Auth-Token"] = auth.token;
-    }
-    return headers;
-}
-
 async function parseResponse(response) {
     if (!response.ok) {
-        const message = await responseMessage(response);
-        if (response.status === 401) {
-            clearExpiredAuth();
-        }
-        throw new Error(message);
+        throw new Error(await responseMessage(response));
     }
     return response.json();
 }
@@ -152,14 +128,6 @@ function protectMath(text) {
     if (items.length === 0 && looksLikeStandaloneFormula(result)) {
         result = push(result, true);
     }
-
-    result = result.replace(/((?:\\(?:frac|sqrt|int|sum|lim|left|right|ln|cdot|times|pm|alpha|beta|theta|pi)\b|[A-Za-z0-9{}_^+\-*/=]+\s*(?:\^|_|=))[^\u4e00-\u9fa5，。；：、]*?(?:\s*\+\s*C)?)/g, (match) => {
-        const cleaned = match.trim();
-        if (!looksLikeFormula(cleaned) || cleaned.length < 3) {
-            return match;
-        }
-        return push(cleaned, cleaned.length > 36 || cleaned.includes("\\int"));
-    });
 
     return {text: result, items};
 }
@@ -269,7 +237,7 @@ async function solveQuestion() {
 }
 
 async function addWrongQuestion() {
-    if (!currentSolution || !ensureLoggedIn()) {
+    if (!currentSolution) {
         return;
     }
     const mistakeReason = prompt("填写错误原因，方便后续分析：", currentSubject === "math" ? "计算步骤不熟练" : "语法点不熟悉");
@@ -286,11 +254,6 @@ async function addWrongQuestion() {
 }
 
 async function loadWrongQuestions() {
-    if (!auth?.token) {
-        currentWrongQuestions = [];
-        wrongList.innerHTML = `<div class="empty-state">${subjectConfig[currentSubject].loginWrongText}</div>`;
-        return;
-    }
     const items = await api.get(`/api/wrong-questions?subject=${currentSubject}`);
     currentWrongQuestions = items;
     if (!items.length) {
@@ -300,7 +263,7 @@ async function loadWrongQuestions() {
     wrongList.innerHTML = items.map(item => `
         <article class="wrong-card" data-id="${item.id}">
             <h3>${escapeHtml(item.question)}</h3>
-            <div class="meta-row">${tags(item.knowledgePoints)}${item.mastered ? '<span class="tag">已掌握</span>' : '<span class="tag warn">待巩固</span>'}</div>
+            <div class="meta-row">${tags(item.knowledgePoints)}${item.mastered ? '<span class="tag success">已掌握</span>' : '<span class="tag warn">待巩固</span>'}</div>
             <div class="section-label">答案</div>
             ${renderTextBlock(item.finalAnswer)}
             <div class="section-label">错因</div>
@@ -314,9 +277,6 @@ async function loadWrongQuestions() {
 }
 
 async function loadAnalysis() {
-    if (!ensureLoggedIn()) {
-        return;
-    }
     setBusy(analysisBtn, true, "生成中");
     try {
         const data = await api.get(`/api/analysis?subject=${currentSubject}`);
@@ -345,9 +305,6 @@ async function loadAnalysis() {
 }
 
 async function generatePractice() {
-    if (!ensureLoggedIn()) {
-        return;
-    }
     setBusy(practiceBtn, true, "生成中");
     try {
         const items = await api.post(`/api/practice?subject=${currentSubject}`);
@@ -374,65 +331,6 @@ function setBusy(button, busy, text) {
     button.disabled = busy;
     button.textContent = text;
     button.classList.toggle("loading", busy);
-}
-
-async function loginOrRegister(mode) {
-    const username = usernameInput.value.trim();
-    const password = passwordInput.value;
-    if (!username || !password) {
-        alert("请输入用户名和密码。");
-        return;
-    }
-    const targetButton = mode === "login" ? loginBtn : registerBtn;
-    setBusy(targetButton, true, mode === "login" ? "登录中" : "注册中");
-    try {
-        auth = await api.post(`/api/auth/${mode}`, {username, password});
-        if (!auth?.token || !auth?.userId) {
-            throw new Error("登录状态创建失败，请重新登录。");
-        }
-        localStorage.setItem("mathmentor_auth", JSON.stringify(auth));
-        passwordInput.value = "";
-        updateAuthView();
-        await loadWrongQuestions();
-        await loadAnalysis();
-    } catch (error) {
-        alert((mode === "login" ? "登录失败：" : "注册失败：") + error.message);
-    } finally {
-        setBusy(targetButton, false, mode === "login" ? "登录" : "注册");
-    }
-}
-
-function logout() {
-    clearExpiredAuth();
-}
-
-function clearExpiredAuth() {
-    auth = null;
-    localStorage.removeItem("mathmentor_auth");
-    updateAuthView();
-    loadWrongQuestions();
-    analysisBox.textContent = `${subjectConfig[currentSubject].label}错题加入后，可自动统计薄弱知识点并生成复习建议。`;
-    analysisBox.className = "analysis-box empty-state";
-    practiceBox.textContent = `根据${subjectConfig[currentSubject].label}错题知识点生成相似题和解析。`;
-    practiceBox.className = "practice-list empty-state";
-}
-
-function updateAuthView() {
-    const loggedIn = Boolean(auth?.token);
-    authUser.textContent = loggedIn ? `当前用户：${auth.username}` : "未登录";
-    usernameInput.hidden = loggedIn;
-    passwordInput.hidden = loggedIn;
-    loginBtn.hidden = loggedIn;
-    registerBtn.hidden = loggedIn;
-    logoutBtn.hidden = !loggedIn;
-}
-
-function ensureLoggedIn() {
-    if (auth?.token) {
-        return true;
-    }
-    alert("请先登录或注册账号。");
-    return false;
 }
 
 function updateQuestionPreview() {
@@ -472,7 +370,7 @@ function openWrongDetail(id) {
         <div class="meta-row">
             <span class="tag">${escapeHtml(subjectConfig[item.subject || "math"]?.label || "数学")}</span>
             ${tags(item.knowledgePoints)}
-            ${item.mastered ? '<span class="tag">已掌握</span>' : '<span class="tag warn">待巩固</span>'}
+            ${item.mastered ? '<span class="tag success">已掌握</span>' : '<span class="tag warn">待巩固</span>'}
         </div>
         <section class="answer-section">
             <div class="section-label">题目</div>
@@ -516,9 +414,6 @@ addWrongBtn.addEventListener("click", addWrongQuestion);
 refreshBtn.addEventListener("click", loadWrongQuestions);
 analysisBtn.addEventListener("click", loadAnalysis);
 practiceBtn.addEventListener("click", generatePractice);
-loginBtn.addEventListener("click", () => loginOrRegister("login"));
-registerBtn.addEventListener("click", () => loginOrRegister("register"));
-logoutBtn.addEventListener("click", logout);
 questionInput.addEventListener("input", updateQuestionPreview);
 wrongList.addEventListener("click", async event => {
     const button = event.target.closest("button[data-action]");
@@ -550,7 +445,6 @@ wrongDetailModal.addEventListener("click", event => {
 
 document.addEventListener("DOMContentLoaded", async () => {
     updateSubjectView();
-    updateAuthView();
     await loadWrongQuestions();
     updateQuestionPreview();
 });

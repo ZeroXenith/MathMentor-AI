@@ -23,9 +23,6 @@ public class WrongQuestion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
 
-    @Column(nullable = false)
-    private long userId;
-
     @Column(length = 32)
     private String subject = "math";
 
@@ -63,14 +60,6 @@ public class WrongQuestion {
 
     public void setId(long id) {
         this.id = id;
-    }
-
-    public long getUserId() {
-        return userId;
-    }
-
-    public void setUserId(long userId) {
-        this.userId = userId;
     }
 
     public String getSubject() {

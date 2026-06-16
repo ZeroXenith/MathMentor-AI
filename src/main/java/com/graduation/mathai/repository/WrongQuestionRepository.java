@@ -7,9 +7,9 @@ import java.util.List;
 import java.util.Optional;
 
 public interface WrongQuestionRepository extends JpaRepository<WrongQuestion, Long> {
-    List<WrongQuestion> findByUserIdOrderByCreatedAtDesc(long userId);
+    List<WrongQuestion> findAllByOrderByCreatedAtDesc();
 
-    List<WrongQuestion> findByUserIdAndSubjectOrderByCreatedAtDesc(long userId, String subject);
+    List<WrongQuestion> findBySubjectOrderByCreatedAtDesc(String subject);
 
-    Optional<WrongQuestion> findByIdAndUserId(long id, long userId);
+    Optional<WrongQuestion> findById(long id);
 }
